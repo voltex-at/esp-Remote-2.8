@@ -39,9 +39,9 @@ icons={
 def svg(body,w=24,h=24):return f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">{body}</svg>'
 items=[]
 for name,body in icons.items():
- s=svg('<g stroke="#ffffff" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+body+'</g>')
+ s=svg('<g stroke="#ffffff" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'+body+'</g>')
  (ASSET/(name+'.svg')).write_text(s);items.append((name,s,28,28))
-mountain=svg('''<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#091116"/><stop offset="1" stop-color="#27383e"/></linearGradient></defs><rect width="240" height="110" fill="url(#sky)"/>
+mountain=svg('''<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#000000"/><stop offset="1" stop-color="#11191e"/></linearGradient></defs><rect width="240" height="110" fill="url(#sky)"/>
 <path fill="#43545b" d="M0 95 20 65 43 78 66 52 93 80 125 27 140 36 155 17 173 41 202 57 221 38 240 65V110H0Z"/>
 <path fill="#96a4a5" d="m66 52-13 30 13-13 18 11Zm59-25-32 53 27-21 5-20 15-3 15-19-14 30 32-6-19 11-14-5-14 13ZM221 38l-19 19 22-4 16 12Z"/>
 <path fill="#1b292f" d="M0 105 44 76 73 104 125 27 118 68 149 45 173 41 160 82 221 38 208 86 240 65v45H0Z"/>

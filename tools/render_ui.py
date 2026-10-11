@@ -4,7 +4,7 @@ from pathlib import Path
 from PIL import Image
 root=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('--lvgl',type=Path,required=True);p.add_argument('--build',type=Path,default=root/'tools/.sim_build');p.add_argument('--jobs',type=int,default=4);a=p.parse_args();build=a.build.resolve();build.mkdir(parents=True,exist_ok=True)
-inc=['-I'+str(root/'remote/include'),'-I'+str(a.lvgl.resolve()),'-DLV_CONF_INCLUDE_SIMPLE','-DLV_LVGL_H_INCLUDE_SIMPLE','-O1','-g','-fsanitize=address,undefined','-fno-omit-frame-pointer']
+inc=['-I'+str(root/'remote/include'),'-I'+str(a.lvgl.resolve()),'-DLV_CONF_INCLUDE_SIMPLE','-DLV_LVGL_H_INCLUDE_SIMPLE','-O1','-g','-pipe','-fsanitize=address,undefined','-fno-omit-frame-pointer']
 files=list((a.lvgl/'src').rglob('*.c'))+list((root/'remote/src').glob('font_*.c'))
 def compile(src):
  obj=build/(str(src.resolve()).replace('/','_')+'.o');subprocess.run(['gcc',*inc,'-c',str(src),'-o',str(obj)],check=True,stdout=subprocess.DEVNULL);return obj

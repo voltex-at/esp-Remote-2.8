@@ -50,9 +50,10 @@ static void load(){config.begin("remote-v1",false);Settings defaults;Settings s=
 }
 static void save(){Settings s=snapshot().settings;config.putBytes("settings",&s,sizeof s);config.putUInt("schema",1);}
 static Settings networkSettings(){Guard g(stateMutex);return state.settings;}
-static void connect(){Settings s=networkSettings();WiFi.disconnect();WiFi.mode(WIFI_STA);WiFi.setSleep(false);WiFi.setAutoReconnect(true);
+static bool connect(){Settings s=networkSettings();WiFi.disconnect();WiFi.mode(WIFI_STA);WiFi.setSleep(false);WiFi.setAutoReconnect(true);
+ if(!s.ssid[0]){Guard g(stateMutex);state.wifiLink=WifiLinkState::Offline;return false;}
  WiFi.begin(s.ssid,s.password);
- {Guard g(stateMutex);state.wifiLink=WifiLinkState::Connecting;}}
+ {Guard g(stateMutex);state.wifiLink=WifiLinkState::Connecting;}return true;}
 static void apply(int key,const char*text,int value){
  {Guard g(stateMutex);auto&s=state.settings;switch(key){
  case Brightness:s.brightness=constrain(value,5,100);break;case Timeout:s.timeoutSec=constrain(value,15,600);break;case Language:s.language=constrain(value,0,2);break;case LogInterval:s.logIntervalSec=constrain(value,5,300);break;case Logging:s.logging=value;break;case Notifications:s.notifications=value;break;case Volume:s.volume=constrain(value,0,100);break;case NetworkMode:s.networkMode=value?1:0;if(!s.networkMode)strlcpy(s.cameraHost,"192.168.4.1",sizeof s.cameraHost);break;
@@ -81,7 +82,7 @@ static void publishScan(int result){
 static void networkTask(void*){
  // All Wi-Fi connect/scan calls run here, never in the LVGL task.
  bool was=false,ota=false,scanPending=false,scanning=false,joinPending=false;
- uint32_t retry=millis(),attempt=retry,scanReady=0;bool attempting=true;WiFi.persistent(false);connect();
+ uint32_t retry=millis(),attempt=retry,scanReady=0;bool attempting=false;WiFi.persistent(false);attempting=connect();
  for(;;){uint32_t now=millis();Command c;
   if(Ota::busy()){vTaskDelay(pdMS_TO_TICKS(50));continue;}
   while(xQueueReceive(networkCommands,&c,0)==pdTRUE){
@@ -102,7 +103,7 @@ static void networkTask(void*){
   if(scanning){int result=WiFi.scanComplete();if(result!=WIFI_SCAN_RUNNING){
    if(result<0)esp_wifi_scan_stop();scanning=false;publishScan(result);joinPending=joinPending||WiFi.status()!=WL_CONNECTED;
   }}
-  if(joinPending&&!scanning&&!scanPending){connect();joinPending=false;retry=attempt=now;attempting=true;}
+  if(joinPending&&!scanning&&!scanPending){attempting=connect();joinPending=false;retry=attempt=now;}
   bool connected=WiFi.status()==WL_CONNECTED;
   if(connected)attempting=false;
   bool failed=!connected&&attempting&&now-attempt>=15000&&!scanning&&!scanPending;
@@ -115,7 +116,7 @@ static void networkTask(void*){
    else if(attempting)state.wifiLink=WifiLinkState::Connecting;
    else if(was)state.wifiLink=WifiLinkState::Offline;
   }
-  if(connected&&!was){configTzTime("CET-1CEST,M3.5.0,M10.5.0/3","pool.ntp.org","time.nist.gov");Settings s=networkSettings();ArduinoOTA.setHostname("esp32-remote");ArduinoOTA.setPassword(s.pairToken);ArduinoOTA.begin();ota=true;}
+  if(connected&&!was){configTzTime("CET-1CEST,M3.5.0,M10.5.0/3","pool.ntp.org","time.nist.gov");Settings s=networkSettings();if(s.pairToken[0]){ArduinoOTA.setHostname("esp32-remote");ArduinoOTA.setPassword(s.pairToken);ArduinoOTA.begin();ota=true;}else{ArduinoOTA.end();ota=false;}}
   if(!connected&&was)alert("Utracono polaczenie Wi-Fi");if(connected&&ota&&!Ota::busy())ArduinoOTA.handle();
   if(!connected&&!attempting&&!scanning&&!scanPending&&now-retry>30000){joinPending=true;}
   was=connected;vTaskDelay(pdMS_TO_TICKS(50));

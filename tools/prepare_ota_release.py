@@ -22,9 +22,9 @@ def metadata(app, version):
     return dict(schema=1, target=TARGET, version=version, size=len(app),
                 sha256=hashlib.sha256(app).hexdigest(),
                 url=f'https://github.com/{REPOSITORY}/releases/download/v{version}/firmware.bin',
-                notes={'pl':'Szybkie rysowanie LCD przy starcie; diagnostyka restartu i test LCD z licznikiem czasu.',
-                       'de':'Schneller LCD-Start; Reset-Diagnose und LCD-Test mit Laufzeit.',
-                       'en':'Fast LCD startup; reset diagnostics and LCD test with uptime.'})
+                notes={'pl':'Wyższy kontrast, większy tekst, mocne kolory, widoczne suwaki i test kolorów.',
+                       'de':'Mehr Kontrast, größere Schrift, kräftige Farben, sichtbare Regler und Farbtest.',
+                       'en':'Higher contrast, larger text, vivid colors, visible sliders and color test.'})
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--out',type=Path,default=ROOT/'release');a=p.parse_args()
@@ -38,12 +38,13 @@ def main():
     (out/'ota.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     for name in ('PILOT_LCD_TEST_APP.bin','PILOT_LCD_TEST_FULL.bin'):
         shutil.copy2(ROOT/'firmware'/name,out/name)
-    (out/'notes.md').write_text(f'''ESP Remote v{version}: poprawiona ścieżka Adafruit_GFX fillScreen/fillRect oraz linie LCD. Ekran startowy jest wysyłany zbiorczo zamiast piksel po pikselu. Pion 240×320, PL/DE/EN i ustawienia NVS są zachowane.
+    (out/'notes.md').write_text(f'''ESP Remote v{version}: czytelniejszy interfejs — czarne tło, bielszy tekst, mocniejsze kolory, grubsze ikony i fonty Montserrat SemiBold. Główne opisy 16 px, nazwy i wartości ustawień w oddzielnych wierszach. Suwaki jasności/głośności są widoczne i pokazują procent. Długie nazwy PL/DE/EN dopasowane do 240×320. Test kolorów: Ustawienia → Ogólne → Wyświetlacz → Test kolorów.
 
-Pierwszy start lub naprawa niestabilnego V1.2/V1.3.0: firmware.bin przez USB pod 0x10000. firmware-merged.bin pod 0x0 jest dla czystej instalacji i usuwa ustawienia.
+USB: firmware.bin pod 0x10000 przy dotychczasowym pierwszym slocie aplikacji. firmware-merged.bin pod 0x0 jest dla czystej instalacji i usuwa ustawienia.
 Kolejne aktualizacje: System → Aktualizacja OTA → Sprawdź → Zainstaluj → Potwierdź. Wymagany router z internetem i czas NTP.
+Przy czystej instalacji wybierz sieć i wpisz własne hasło oraz token kamery. Firmware nie zawiera fabrycznych poświadczeń. Aktualizacja aplikacji zachowuje dane już zapisane w NVS; techniczne ArduinoOTA w LAN uruchamia się tylko z niepustym tokenem.
 
-Nie potwierdzono przyczyny restartów z filmu. Jeśli wystąpią ponownie: PILOT_LCD_TEST_APP.bin pod 0x10000, obserwuj licznik ALIVE przez 60 sekund. Ten test nie uruchamia Wi-Fi, LVGL, SD ani audio. Następnie przywróć firmware.bin. Log USB 115200 podaje przyczynę resetu, ostatni etap startu i stan pamięci; zachowaj cały log z dwóch uruchomień.
+Zachowano szybką ścieżkę LCD z V1.3.1, pion, PL/DE/EN, sensory, SD, diagnostykę restartu i schemat ustawień NVS. Nie zmieniono kalibracji, inwersji ani transmisji RGB565 działającego LCD. Ekran testowy pozwala porównać kolory panelu; podgląd z renderera nie jest zdjęciem urządzenia.
 
 Kompilacja oraz testy programowe w Actions. Nie wykonano testu na fizycznym pilocie. Automatyczny rollback nie jest skonfigurowany ani deklarowany.
 ''')

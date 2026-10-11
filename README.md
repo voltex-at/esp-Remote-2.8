@@ -5,9 +5,10 @@ Wi-Fi z wyszukiwaniem sieci i klawiaturą hasła, języki polski/niemiecki/angie
 sensory BME688/BSEC2 i SCD41 przez I²C/pogo, ESP-CAM przez router lub Direct,
 karta SD przeznaczona na nagrania i logi. Nie zmieniono schematu ustawień V1.2.
 
-V1.3.1 poprawia powolne rysowanie ekranu startowego: publiczne funkcje Adafruit_GFX
-korzystają teraz ze zbiorczych transferów LCD. Dodano diagnostykę resetu w logu USB
-i licznik `ALIVE` w niezależnym teście LCD. [Opis i test na urządzeniu](docs/LCD_FIX_V1_3_1.md).
+V1.3.2 zwiększa kontrast, rozmiar i grubość tekstu oraz ikon. Nazwy i wartości ustawień
+są rozdzielone; suwaki jasności/głośności są widoczne i pokazują procent. Dodano
+**Wyświetlacz → Test kolorów**. [Opis i podgląd](docs/READABILITY_V1_3_2.md).
+Zachowano szybką ścieżkę LCD i diagnostykę resetu z [V1.3.1](docs/LCD_FIX_V1_3_1.md).
 
 ## Instalacja i OTA
 
@@ -25,6 +26,9 @@ Na pilocie: **Ustawienia → System → Aktualizacja OTA → Sprawdź aktualizac
 Połącz pilot z routerem z dostępem do internetu i poczekaj na ustawienie czasu NTP.
 Zatrzymaj nagrywanie/odtwarzanie, audio i skan Wi-Fi przed aktualizacją.
 Sprawdzenie wersji ani połączenie Wi-Fi nie rozpoczyna instalacji automatycznie.
+Nowa instalacja wymaga wyboru sieci i wpisania własnego hasła oraz tokena kamery.
+Firmware nie zawiera domyślnych poświadczeń; techniczne ArduinoOTA w LAN uruchamia
+się wyłącznie z niepustym tokenem. Aktualizacja aplikacji zachowuje zapisane ustawienia.
 
 Klient weryfikuje certyfikaty HTTPS, sprzęt, rozmiar partycji i SHA-256. Zapisuje drugą
 partycję i wybiera ją dopiero po pełnej weryfikacji obrazu. SHA-256 wykrywa uszkodzenie;
@@ -42,5 +46,5 @@ Istniejące wydania nie są nadpisywane. Każdy commit nie oznacza nowego wydani
 Pełna dokumentacja sprzętu i funkcji: [README_PL.md](README_PL.md).
 OTA: [docs/OTA.md](docs/OTA.md). Diagnostyka LCD: [docs/LCD_FIX_V1_2.md](docs/LCD_FIX_V1_2.md).
 
-V1.3.1 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
+V1.3.2 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
 działania LCD, sensorów, radia ani aktualizacji przy zaniku zasilania.
