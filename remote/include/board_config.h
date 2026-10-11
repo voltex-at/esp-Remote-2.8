@@ -24,4 +24,4 @@ static_assert(LCD_ROTATION==0||LCD_ROTATION==2,"Only portrait rotations 0 and 2 
 // ILI9341 rotation0: MX+BGR; rotation2: MY+BGR. Rotation1 in Peppiuhr is MV+BGR (0x28).
 constexpr uint8_t LCD_MADCTL=LCD_ROTATION==2?0x88:0x48;
 constexpr uint32_t LCD_SPI_HZ=40000000;
-constexpr char FIRMWARE_VERSION[]="1.3.2";
+constexpr char FIRMWARE_VERSION[]="1.3.3";

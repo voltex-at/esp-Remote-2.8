@@ -70,7 +70,9 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
   assert(lv_obj_has_state(lv_obj_get_parent(findLabel(lv_scr_act(),installTexts[lang])),LV_STATE_DISABLED));
   auto*back=findType(lv_scr_act(),&lv_btn_class);assert(back);lv_event_send(back,LV_EVENT_CLICKED,nullptr);Ui::update(s);assert(Ui::current()==Screen::Update);
   snprintf(name,sizeof name,"%s/ota_progress_%d.ppm",argv[1],lang);save(name);
-  for(int error=1;error<=int(Ota::Error::Battery);error++){s.ota.state=Ota::State::Error;s.ota.error=Ota::Error(error);Ui::update(s);lv_obj_update_layout(lv_scr_act());lv_refr_now(nullptr);}
+  for(int error=1;error<=int(Ota::Error::Redirect);error++){s.ota.state=Ota::State::Error;s.ota.error=Ota::Error(error);Ui::update(s);lv_obj_update_layout(lv_scr_act());lv_refr_now(nullptr);}
+  s.ota.error=Ota::Error::Tls;s.ota.detail=-9984;Ui::update(s);
+  const char*tlsTexts[]={"Błąd HTTPS/TLS. Kod: -9984","HTTPS/TLS-Fehler. Code: -9984","HTTPS/TLS error. Code: -9984"};assert(findLabel(lv_scr_act(),tlsTexts[lang]));
   snprintf(name,sizeof name,"%s/ota_error_%d.ppm",argv[1],lang);save(name);
   s.ota=Ota::Status{};Ui::update(s);
  }

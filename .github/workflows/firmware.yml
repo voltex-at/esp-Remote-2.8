@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install build tools
-        run: pip install platformio==6.1.18 pillow
+        run: pip install platformio==6.1.18 pillow cryptography==46.0.3
       - name: Test OTA policy and packaging
         run: |
           python -m unittest discover -s tests -v

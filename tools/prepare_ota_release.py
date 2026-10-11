@@ -22,9 +22,9 @@ def metadata(app, version):
     return dict(schema=1, target=TARGET, version=version, size=len(app),
                 sha256=hashlib.sha256(app).hexdigest(),
                 url=f'https://github.com/{REPOSITORY}/releases/download/v{version}/firmware.bin',
-                notes={'pl':'Wyższy kontrast, większy tekst, mocne kolory, widoczne suwaki i test kolorów.',
-                       'de':'Mehr Kontrast, größere Schrift, kräftige Farben, sichtbare Regler und Farbtest.',
-                       'en':'Higher contrast, larger text, vivid colors, visible sliders and color test.'})
+                notes={'pl':'Naprawa HTTPS OTA: nowe certyfikaty CA, błędy DNS/TLS/HTTP. Zachowano czytelny interfejs.',
+                       'de':'HTTPS-OTA: neue CA-Zertifikate, DNS/TLS/HTTP-Diagnose. Gut lesbare Oberfläche bleibt.',
+                       'en':'HTTPS OTA fix: updated CA roots, DNS/TLS/HTTP diagnostics. Clear interface retained.'})
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--out',type=Path,default=ROOT/'release');a=p.parse_args()
@@ -38,7 +38,11 @@ def main():
     (out/'ota.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     for name in ('PILOT_LCD_TEST_APP.bin','PILOT_LCD_TEST_FULL.bin'):
         shutil.copy2(ROOT/'firmware'/name,out/name)
-    (out/'notes.md').write_text(f'''ESP Remote v{version}: czytelniejszy interfejs — czarne tło, bielszy tekst, mocniejsze kolory, grubsze ikony i fonty Montserrat SemiBold. Główne opisy 16 px, nazwy i wartości ustawień w oddzielnych wierszach. Suwaki jasności/głośności są widoczne i pokazują procent. Długie nazwy PL/DE/EN dopasowane do 240×320. Test kolorów: Ustawienia → Ogólne → Wyświetlacz → Test kolorów.
+    (out/'notes.md').write_text(f'''ESP Remote v{version}: poprawka HTTPS OTA. Własny zestaw publicznych CA obejmuje nowe rooty Sectigo E46/R46, których brakowało w starym SDK. Zachowano weryfikację certyfikatu i hosta. Nowe komunikaty rozróżniają DNS, połączenie, TLS z kodem, HTTP 404/403/429 i przekierowania. Log USB 115200 pokazuje etap/kody bez haseł i tokenów. Pierwsze sprawdzenie czeka do 15 s na NTP.
+
+Jeśli V1.3.1/V1.3.2 nie może połączyć się z GitHub przez HTTPS, tę poprawkę wgraj jednorazowo przez USB. Po dotychczasowej instalacji merged i przed udanym OTA: firmware.bin pod 0x10000, bez kasowania pamięci — zachowuje ustawienia. firmware-merged.bin pod 0x0 to czysta instalacja i usuwa ustawienia. Sam zapis pod 0x10000 nie przełącza aktywnego slotu, jeśli wcześniejsze OTA wybrało inny. Szczegóły: docs/OTA_FIX_V1_3_3.md.
+
+Zachowano czytelność V1.3.2: czarne tło, bielszy tekst, mocne kolory, fonty Montserrat SemiBold, widoczne suwaki oraz Test kolorów. Zachowano szybką ścieżkę LCD, pion, PL/DE/EN i schemat NVS.
 
 USB: firmware.bin pod 0x10000 przy dotychczasowym pierwszym slocie aplikacji. firmware-merged.bin pod 0x0 jest dla czystej instalacji i usuwa ustawienia.
 Kolejne aktualizacje: System → Aktualizacja OTA → Sprawdź → Zainstaluj → Potwierdź. Wymagany router z internetem i czas NTP.

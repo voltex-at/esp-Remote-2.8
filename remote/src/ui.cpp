@@ -182,6 +182,12 @@ static const char*otaText(){using Ota::State;using Ota::Error;
  case Error::Network:return tr("Połącz Wi-Fi z internetem.","WLAN mit Internet verbinden.","Connect Wi-Fi with internet.");
  case Error::Clock:return tr("Czekaj na czas NTP. Użyj routera.","Auf NTP warten. Router nutzen.","Wait for NTP. Use a router.");
  case Error::Http:return tr("Brak wydania lub błąd HTTPS.","Kein Release / HTTPS-Fehler.","No release or HTTPS error.");
+ case Error::Dns:return tr("Błąd DNS. Sprawdź router.","DNS-Fehler. Router prüfen.","DNS failed. Check router.");
+ case Error::Connection:return tr("GitHub nie odpowiada. Sprawdź internet.","GitHub antwortet nicht. Internet prüfen.","GitHub unreachable. Check internet.");
+ case Error::Tls:{static char text[100];snprintf(text,sizeof text,tr("Błąd HTTPS/TLS. Kod: %ld","HTTPS/TLS-Fehler. Code: %ld","HTTPS/TLS error. Code: %ld"),long(data.ota.detail));return text;}
+ case Error::NotFound:return tr("Brak pliku wydania (HTTP 404).","Release-Datei fehlt (HTTP 404).","Release file missing (HTTP 404).");
+ case Error::RateLimit:return tr("GitHub odrzuca żądanie. Spróbuj później.","GitHub lehnt Anfrage ab. Später erneut.","GitHub rejected request. Retry later.");
+ case Error::Redirect:return tr("Błąd przekierowania GitHub.","GitHub-Weiterleitung fehlgeschlagen.","GitHub redirect failed.");
  case Error::Manifest:return tr("Nieprawidłowy opis wydania.","Ungültige Release-Daten.","Invalid release metadata.");
  case Error::Memory:return tr("Za mało pamięci. Uruchom ponownie.","Zu wenig RAM. Neu starten.","Low memory. Restart device.");
  case Error::Partition:return tr("Błąd partycji OTA.","OTA-Partitionsfehler.","OTA partition error.");

@@ -16,7 +16,7 @@ inline bool validHash(const char*s){if(!s||strlen(s)!=64)return false;for(int i=
 inline bool allowedUrl(const char*s){if(!s)return false;return !strncmp(s,RELEASE_PREFIX,sizeof(RELEASE_PREFIX)-1)||!strncmp(s,ASSET_PREFIX,sizeof(ASSET_PREFIX)-1);}
 inline bool appHeader(const uint8_t*p,size_t n){return n>=36&&p[0]==0xe9&&p[12]==9&&p[13]==0&&p[32]==0x32&&p[33]==0x54&&p[34]==0xcd&&p[35]==0xab;}
 enum class State:uint8_t { Idle,Checking,Current,Available,Downloading,Verifying,Restarting,Error };
-enum class Error:uint8_t { None,Network,Clock,Http,Manifest,Memory,Partition,Expired,Download,Checksum,Image,Write,Busy,Battery };
-struct Status {State state=State::Idle;Error error=Error::None;uint8_t progress=0;char version[24]={};char notes[3][192]={};};
+enum class Error:uint8_t { None,Network,Clock,Http,Manifest,Memory,Partition,Expired,Download,Checksum,Image,Write,Busy,Battery,Dns,Connection,Tls,NotFound,RateLimit,Redirect };
+struct Status {State state=State::Idle;Error error=Error::None;uint8_t progress=0;int32_t detail=0;char version[24]={};char notes[3][192]={};};
 inline bool installing(State s){return s==State::Downloading||s==State::Verifying||s==State::Restarting;}
 }
