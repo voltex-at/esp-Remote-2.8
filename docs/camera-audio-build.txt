@@ -1,0 +1,5 @@
+PLATFORM: Espressif 32 (6.9.0) > AI Thinker ESP32-CAM
+RAM:   [==        ]  16.7% (used 54880 bytes from 327680 bytes)
+Flash: [===       ]  28.9% (used 909993 bytes from 3145728 bytes)
+========================= [SUCCESS] Took 19.00 seconds =========================
+esp32cam_audio  SUCCESS   00:00:19.004

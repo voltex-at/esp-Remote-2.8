@@ -1,0 +1,10 @@
+V1.2 — 2026-10-11, native tests on PC
+portrait_test.cpp: PASS — all portrait coordinates, rotations 0/2, invalid
+coordinates, rectangle clipping.
+display_transport_test.cpp + actual portrait_display.cpp: PASS for rotations
+0 and 2, with AddressSanitizer and UndefinedBehaviorSanitizer.
+Checked SPI pins, command/data state, initialization delays, MADCTL 0x48/0x88,
+RGB565 byte order, rectangle bounds, odd pixel counts and 2-byte-aligned input.
+SPI spy models Arduino 2 writePixels() 32-bit source reads.
+LeakSanitizer disabled because /proc access is unavailable.
+These are software tests, not a GPIO measurement or physical LCD test.

@@ -1,0 +1,2 @@
+Rendered 63 screens, 3 password views, 3 scan states, offline and 150 transitions. Wi-Fi/password/language callbacks OK.
+AddressSanitizer and UndefinedBehaviorSanitizer: no errors. LeakSanitizer disabled in restricted executor.

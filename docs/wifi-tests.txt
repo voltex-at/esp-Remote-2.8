@@ -1,0 +1,3 @@
+Wi-Fi aggregation: hidden SSID, strongest AP, security separation, sorted top 16: OK.
+LVGL callbacks: language PL/DE/EN, scan, keyboard input, mask/reveal, validation, HEX PSK, cancel, open-network password reset, connect command order: OK.
+No physical RF association tests.

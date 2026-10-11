@@ -1,0 +1,9 @@
+V1.2 — 2026-10-11, final source/build verification
+Command: pio run -d remote -e es3c28p -j 4
+PLATFORM: Espressif 32 (6.9.0) > LCDWIKI ES3C28P ESP32-S3 N16R8
+Arduino: 2.0.17; LVGL: 8.3.11
+RAM:   [=====     ]  47.6% (used 156004 bytes from 327680 bytes)
+Flash: [===       ]  27.6% (used 1448569 bytes from 5242880 bytes)
+========================= [SUCCESS] Took 4.83 seconds =========================
+APP image: 1448928 bytes; FULL image: 1514464 bytes.
+Incremental final verification after complete compilation. No hardware attached.

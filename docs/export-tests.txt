@@ -1,0 +1,7 @@
+test_interrupted_write_preserves_complete_frame (test_export.RvcTests.test_interrupted_write_preserves_complete_frame) ... ok
+test_invalid_large_length_rejected (test_export.RvcTests.test_invalid_large_length_rejected) ... ok
+test_nonmonotonic_time_rejected (test_export.RvcTests.test_nonmonotonic_time_rejected) ... ok
+test_timing_and_complete_jpegs (test_export.RvcTests.test_timing_and_complete_jpegs) ... ok
+test_wrong_magic_rejected (test_export.RvcTests.test_wrong_magic_rejected) ... ok
+Ran 5 tests in 0.144s
+OK

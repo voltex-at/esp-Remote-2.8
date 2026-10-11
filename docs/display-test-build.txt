@@ -1,0 +1,10 @@
+V1.2 — 2026-10-11
+Command: pio run -d remote -e display_test -j 4
+PLATFORM: Espressif 32 (6.9.0) > LCDWIKI ES3C28P ESP32-S3 N16R8
+Arduino: 2.0.17; Adafruit GFX: 1.11.11
+RAM: 19388 bytes from 327680 bytes (5.9%).
+Flash: 301349 bytes from 5242880 bytes (5.7%).
+SUCCESS (final incremental rebuild: 1.719 seconds).
+APP image: 301712 bytes; FULL image: 367248 bytes.
+No LVGL, Wi-Fi, SD, sensors or audio. No PSRAM prerequisite in setup().
+No physical LCD/touch test was possible here.

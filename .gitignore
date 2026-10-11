@@ -1,0 +1,12 @@
+.pio/
+.venv/
+__pycache__/
+*.pyc
+*.o
+*.ppm
+tools/.sim_build/
+release/
+firmware/*.bin
+firmware/SHA256SUMS.txt
+remote/cc*.s
+remote/cc*.o
