@@ -52,6 +52,14 @@ void PortraitDisplay::writeFillRect(int16_t x,int16_t y,int16_t w,int16_t h,uint
  int32_t left=x,top=y,width=w,height=h;if(!Portrait::clip(left,top,width,height))return;
  alignas(4) uint16_t block[128];for(auto&p:block)p=color;uint32_t remaining=width*height;
  select();window(left,top,width,height);
- while(remaining){uint32_t count=remaining>128?128:remaining;spi_.writePixels(block,count*sizeof(uint16_t));remaining-=count;}
+ // writePixels in Arduino2 reads whole 32-bit words. Keep the same safe
+ // treatment of a final odd pixel as pushRect.
+ while(remaining>=2){uint32_t count=remaining>128?128:remaining&~1U;spi_.writePixels(block,count*sizeof(uint16_t));remaining-=count;}
+ if(remaining)word(color);
  release();
 }
+void PortraitDisplay::fillRect(int16_t x,int16_t y,int16_t w,int16_t h,uint16_t color){writeFillRect(x,y,w,h,color);}
+void PortraitDisplay::drawFastVLine(int16_t x,int16_t y,int16_t h,uint16_t color){writeFillRect(x,y,1,h,color);}
+void PortraitDisplay::drawFastHLine(int16_t x,int16_t y,int16_t w,uint16_t color){writeFillRect(x,y,w,1,color);}
+void PortraitDisplay::writeFastVLine(int16_t x,int16_t y,int16_t h,uint16_t color){writeFillRect(x,y,1,h,color);}
+void PortraitDisplay::writeFastHLine(int16_t x,int16_t y,int16_t w,uint16_t color){writeFillRect(x,y,w,1,color);}

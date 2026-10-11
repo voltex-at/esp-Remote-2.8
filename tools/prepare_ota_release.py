@@ -22,9 +22,9 @@ def metadata(app, version):
     return dict(schema=1, target=TARGET, version=version, size=len(app),
                 sha256=hashlib.sha256(app).hexdigest(),
                 url=f'https://github.com/{REPOSITORY}/releases/download/v{version}/firmware.bin',
-                notes={'pl':'Aktualizacje GitHub OTA, pion 240x320, Wi-Fi i PL/DE/EN.',
-                       'de':'GitHub OTA, Hochformat 240x320, WLAN und PL/DE/EN.',
-                       'en':'GitHub OTA, portrait 240x320, Wi-Fi and PL/DE/EN.'})
+                notes={'pl':'Szybkie rysowanie LCD przy starcie; diagnostyka restartu i test LCD z licznikiem czasu.',
+                       'de':'Schneller LCD-Start; Reset-Diagnose und LCD-Test mit Laufzeit.',
+                       'en':'Fast LCD startup; reset diagnostics and LCD test with uptime.'})
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--out',type=Path,default=ROOT/'release');a=p.parse_args()
@@ -38,10 +38,12 @@ def main():
     (out/'ota.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     for name in ('PILOT_LCD_TEST_APP.bin','PILOT_LCD_TEST_FULL.bin'):
         shutil.copy2(ROOT/'firmware'/name,out/name)
-    (out/'notes.md').write_text(f'''ESP Remote v{version}: aktualizacje GitHub OTA w menu System, PL/DE/EN, zachowany pion 240×320 i ustawienia NVS.
+    (out/'notes.md').write_text(f'''ESP Remote v{version}: poprawiona ścieżka Adafruit_GFX fillScreen/fillRect oraz linie LCD. Ekran startowy jest wysyłany zbiorczo zamiast piksel po pikselu. Pion 240×320, PL/DE/EN i ustawienia NVS są zachowane.
 
-Pierwszy start z V1.2: firmware.bin przez USB pod 0x10000. firmware-merged.bin pod 0x0 jest dla czystej instalacji i usuwa ustawienia.
+Pierwszy start lub naprawa niestabilnego V1.2/V1.3.0: firmware.bin przez USB pod 0x10000. firmware-merged.bin pod 0x0 jest dla czystej instalacji i usuwa ustawienia.
 Kolejne aktualizacje: System → Aktualizacja OTA → Sprawdź → Zainstaluj → Potwierdź. Wymagany router z internetem i czas NTP.
+
+Nie potwierdzono przyczyny restartów z filmu. Jeśli wystąpią ponownie: PILOT_LCD_TEST_APP.bin pod 0x10000, obserwuj licznik ALIVE przez 60 sekund. Ten test nie uruchamia Wi-Fi, LVGL, SD ani audio. Następnie przywróć firmware.bin. Log USB 115200 podaje przyczynę resetu, ostatni etap startu i stan pamięci; zachowaj cały log z dwóch uruchomień.
 
 Kompilacja oraz testy programowe w Actions. Nie wykonano testu na fizycznym pilocie. Automatyczny rollback nie jest skonfigurowany ani deklarowany.
 ''')
@@ -54,7 +56,7 @@ Kompilacja oraz testy programowe w Actions. Nie wykonano testu na fizycznym pilo
         for path in sorted(ROOT.rglob('*')):
             rel=path.relative_to(ROOT)
             if not path.is_file() or any(part in ('.git','.pio','.sim_build','__pycache__','release') for part in rel.parts):continue
-            if path.suffix in ('.o','.pyc','.ppm') or re.match(r'remote/cc[^/]+\.[os]$',rel.as_posix()):continue
+            if path.suffix in ('.o','.pyc','.ppm') or re.match(r'remote/cc[^/]+\.(?:o|s|c|ld|le)$',rel.as_posix()):continue
             z.write(path,'source/'+rel.as_posix())
         for path in sorted(out.iterdir()):
             if path.suffix in ('.bin','.json','.txt','.md'):z.write(path,'bin/'+path.name)

@@ -15,6 +15,26 @@ QueueHandle_t commands,mediaCommands;
 uint16_t* videoPixels=nullptr;bool videoDirty=false;
 static Preferences config;static bool ready=false;
 static QueueHandle_t networkCommands;
+// Retained across software/panic/watchdog resets, without writing flash.
+// A video cannot distinguish a watchdog, a panic and a supply brownout;
+// record the reset cause and the last completed startup stage for USB logs.
+enum class BootStage:uint8_t { Start,Lcd,Config,Lvgl,Sd,Audio,Sensors,Network,Media,AudioTask,Running };
+RTC_NOINIT_ATTR static volatile BootStage retainedStage;
+RTC_NOINIT_ATTR static volatile uint32_t retainedMagic;
+constexpr uint32_t BOOT_TRACE_MAGIC=0x45535231;
+static const char*stageName(BootStage s){switch(s){
+ case BootStage::Lcd:return "LCD";case BootStage::Config:return "config/PSRAM";case BootStage::Lvgl:return "LVGL";
+ case BootStage::Sd:return "SD";case BootStage::Audio:return "audio init";case BootStage::Sensors:return "sensors task";
+ case BootStage::Network:return "network task";case BootStage::Media:return "media task";case BootStage::AudioTask:return "audio task";
+ case BootStage::Running:return "running";default:return "start";
+}}
+static const char*resetName(esp_reset_reason_t r){switch(r){
+ case ESP_RST_POWERON:return "power-on";case ESP_RST_EXT:return "external";case ESP_RST_SW:return "software";
+ case ESP_RST_PANIC:return "panic";case ESP_RST_INT_WDT:return "interrupt watchdog";case ESP_RST_TASK_WDT:return "task watchdog";
+ case ESP_RST_WDT:return "watchdog";case ESP_RST_DEEPSLEEP:return "deep sleep";case ESP_RST_BROWNOUT:return "brownout";
+ case ESP_RST_SDIO:return "SDIO";default:return "unknown";
+}}
+static void stage(BootStage s){retainedStage=s;retainedMagic=BOOT_TRACE_MAGIC;Serial.printf("[BOOT STAGE] %s ms=%lu internal=%u stack=%u\n",stageName(s),(unsigned long)millis(),ESP.getFreeHeap(),(unsigned)uxTaskGetStackHighWaterMark(nullptr));}
 AppState snapshot(){Guard g(stateMutex);return state;}
 void message(const char*t){Guard g(stateMutex);strlcpy(state.message,t,sizeof state.message);}
 void alert(const char*t){
@@ -103,23 +123,33 @@ static void networkTask(void*){
 }
 void setup(){
  Serial.begin(115200);uint32_t usbWait=millis();while(!Serial&&millis()-usbWait<250)delay(5);
+ const esp_reset_reason_t reset=esp_reset_reason();
+ const BootStage previous=reset!=ESP_RST_POWERON&&retainedMagic==BOOT_TRACE_MAGIC&&(uint8_t)retainedStage<=(uint8_t)BootStage::Running?retainedStage:BootStage::Start;
+ Serial.printf("[BOOT RESET] reason=%s (%d) previous=%s\n",resetName(reset),(int)reset,stageName(previous));
+ stage(BootStage::Start);
  // LCD must be alive before any PSRAM/LVGL allocation can abort startup.
+ stage(BootStage::Lcd);
  Board::displayBegin();Board::bootStatus("Hardware startup","LCD initialized before PSRAM");
  Serial.printf("[BOOT] firmware=%s reset=%d PSRAM=%u free=%u internal=%u\n",FIRMWARE_VERSION,(int)esp_reset_reason(),ESP.getPsramSize(),ESP.getFreePsram(),ESP.getFreeHeap());
  stateMutex=xSemaphoreCreateMutex();i2cMutex=xSemaphoreCreateMutex();sdMutex=xSemaphoreCreateMutex();frameMutex=xSemaphoreCreateMutex();commands=xQueueCreate(16,sizeof(Command));mediaCommands=xQueueCreate(16,sizeof(Command));networkCommands=xQueueCreate(8,sizeof(Command));
  if(!stateMutex||!i2cMutex||!sdMutex||!frameMutex||!commands||!mediaCommands||!networkCommands){Board::bootError("RTOS allocation failed","Check internal RAM / USB log");return;}
- load();if(!psramFound()){Board::bootError("PSRAM not found","Check N16R8 / qio_opi");return;}
+ stage(BootStage::Config);load();if(!psramFound()){Board::bootError("PSRAM not found","Check N16R8 / qio_opi");return;}
  // Prove the custom LVGL allocator works, rather than letting lv_init assert.
  void*probe=heap_caps_malloc(256*1024,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);if(!probe){Board::bootError("PSRAM allocation failed","LVGL needs external RAM");return;}heap_caps_free(probe);
- Board::bootStatus("LVGL startup","RGB565 / native portrait");lv_init();if(!Board::begin()){Board::bootError("LVGL display allocation failed","Read the USB startup log");return;}
+ stage(BootStage::Lvgl);Board::bootStatus("LVGL startup","RGB565 / native portrait");lv_init();if(!Board::begin()){Board::bootError("LVGL display allocation failed","Read the USB startup log");return;}
  videoPixels=(uint16_t*)ps_calloc(224*168,2);if(!videoPixels){message("Wymagana PSRAM OPI 8MB");}
  Ui::begin(dispatch);Ui::update(snapshot());Board::brightness(snapshot().settings.brightness);lv_refr_now(nullptr);
- bool sd=Storage::begin();{Guard g(stateMutex);state.sd=sd;}bool audio=Board::audioBegin();Serial.printf("[BOOT] SD=%d audio=%d\n",sd,audio);
- bool tasks=xTaskCreatePinnedToCore(Sensors::task,"sensors",16000,nullptr,2,nullptr,0)==pdPASS;
- tasks=(xTaskCreatePinnedToCore(networkTask,"network",16000,nullptr,1,nullptr,0)==pdPASS)&&tasks;
- if(videoPixels)tasks=(xTaskCreatePinnedToCore(Media::task,"media",16000,nullptr,1,nullptr,0)==pdPASS)&&tasks;
- tasks=(xTaskCreatePinnedToCore(Board::audioTask,"audio",12000,nullptr,3,nullptr,0)==pdPASS)&&tasks;
- if(!tasks){Board::bootError("Task allocation failed","Check free internal RAM");return;}ready=true;Serial.println("[BOOT] READY: LVGL + sensors + network");
+ stage(BootStage::Sd);bool sd=Storage::begin();{Guard g(stateMutex);state.sd=sd;}
+ stage(BootStage::Audio);bool audio=Board::audioBegin();Serial.printf("[BOOT] SD=%d audio=%d\n",sd,audio);
+ stage(BootStage::Sensors);bool tasks=xTaskCreatePinnedToCore(Sensors::task,"sensors",16000,nullptr,2,nullptr,0)==pdPASS;
+ stage(BootStage::Network);tasks=(xTaskCreatePinnedToCore(networkTask,"network",16000,nullptr,1,nullptr,0)==pdPASS)&&tasks;
+ stage(BootStage::Media);if(videoPixels)tasks=(xTaskCreatePinnedToCore(Media::task,"media",16000,nullptr,1,nullptr,0)==pdPASS)&&tasks;
+ stage(BootStage::AudioTask);tasks=(xTaskCreatePinnedToCore(Board::audioTask,"audio",12000,nullptr,3,nullptr,0)==pdPASS)&&tasks;
+ if(!tasks){Board::bootError("Task allocation failed","Check free internal RAM");return;}
+ if(reset==ESP_RST_PANIC||reset==ESP_RST_INT_WDT||reset==ESP_RST_TASK_WDT||reset==ESP_RST_WDT||reset==ESP_RST_BROWNOUT){
+  char text[120];snprintf(text,sizeof text,"Restart: %s (%s). USB: 115200",resetName(reset),stageName(previous));message(text);
+ }
+ ready=true;stage(BootStage::Running);Serial.println("[BOOT] READY: LVGL + sensors + network");
 }
 void loop(){
  if(!ready){static uint32_t report=0;if(millis()-report>2000){report=millis();Board::bootReport();}delay(100);return;}
@@ -146,4 +176,8 @@ void loop(){
  static bool dark=false;bool shouldDark=idle>(uint32_t)s.timeoutSec*1000&&!snapshot().talking&&!Ota::busy();
  if(shouldDark!=dark){dark=shouldDark;Board::brightness(dark?5:s.brightness);}
  lv_timer_handler();delay(5);
+ static uint32_t healthTick=0;if(now-healthTick>=10000){healthTick=now;
+  Serial.printf("[HEALTH] uptime=%lu heap=%u PSRAM=%u loop_stack_free_min=%u\n",
+   (unsigned long)(now/1000),ESP.getFreeHeap(),ESP.getFreePsram(),(unsigned)uxTaskGetStackHighWaterMark(nullptr));
+ }
 }

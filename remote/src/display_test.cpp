@@ -2,6 +2,7 @@
 #include "portrait_display.h"
 #include "board_config.h"
 #include <Wire.h>
+#include <esp_system.h>
 static PortraitDisplay lcd;
 static void pattern(){
  lcd.fillScreen(0x0000);const uint16_t colors[]={0xf800,0x07e0,0x001f};const char*names[]={"RED","GREEN","BLUE"};
@@ -11,12 +12,14 @@ static void pattern(){
 }
 void setup(){
  Serial.begin(115200);pinMode(Pins::ampEnable,OUTPUT);digitalWrite(Pins::ampEnable,HIGH);pinMode(Pins::boot,INPUT_PULLUP);
+ Serial.printf("[LCD TEST] firmware=%s reset=%d\n",FIRMWARE_VERSION,(int)esp_reset_reason());
  lcd.begin();ledcSetup(0,5000,8);ledcAttachPin(Pins::backlight,0);ledcWrite(0,204);pattern();
  pinMode(Pins::touchReset,OUTPUT);digitalWrite(Pins::touchReset,LOW);delay(10);digitalWrite(Pins::touchReset,HIGH);delay(220);pinMode(Pins::touchIrq,INPUT_PULLUP);Wire.begin(Pins::sda,Pins::scl,100000);Wire.setTimeOut(20);
 }
 void loop(){
  static uint32_t report=0,lastTouch=0;static bool wasBoot=false;bool boot=digitalRead(Pins::boot)==LOW;if(boot&&!wasBoot)pattern();wasBoot=boot;
- if(millis()-report>2000){report=millis();Serial.printf("[LCD TEST] portrait=%ux%u rotation=%u PSRAM=%u (not required by this test)\n",Portrait::width,Portrait::height,LCD_ROTATION,ESP.getPsramSize());}
+ if(millis()-report>2000){report=millis();lcd.fillRect(8,258,224,16,0x0000);lcd.setCursor(8,260);lcd.setTextSize(1);lcd.setTextColor(0x07e0);lcd.print("ALIVE ");lcd.print(report/1000);lcd.print("s / ");lcd.print(FIRMWARE_VERSION);
+  Serial.printf("[LCD TEST] uptime=%lu portrait=%ux%u rotation=%u PSRAM=%u (not required by this test)\n",(unsigned long)(report/1000),Portrait::width,Portrait::height,LCD_ROTATION,ESP.getPsramSize());}
  Wire.beginTransmission(0x38);Wire.write(0x02);
  if(Wire.endTransmission(false)==0&&Wire.requestFrom((uint8_t)0x38,(uint8_t)5)==5){uint8_t n=Wire.read(),xh=Wire.read(),xl=Wire.read(),yh=Wire.read(),yl=Wire.read();int16_t x,y;
   if((n&15)>0&&(xh>>6)!=1&&Portrait::touch(((xh&15)<<8)|xl,((yh&15)<<8)|yl,x,y,LCD_ROTATION)){

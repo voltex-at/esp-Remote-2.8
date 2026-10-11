@@ -13,6 +13,13 @@ public:
  void drawPixel(int16_t x,int16_t y,uint16_t color) override;
  void writePixel(int16_t x,int16_t y,uint16_t color) override;
  void writeFillRect(int16_t x,int16_t y,int16_t w,int16_t h,uint16_t color) override;
+ // GFX fillScreen calls fillRect, not writeFillRect. Override both API layers
+ // so boot screens and diagnostics never open one SPI transaction per pixel.
+ void fillRect(int16_t x,int16_t y,int16_t w,int16_t h,uint16_t color) override;
+ void drawFastVLine(int16_t x,int16_t y,int16_t h,uint16_t color) override;
+ void drawFastHLine(int16_t x,int16_t y,int16_t w,uint16_t color) override;
+ void writeFastVLine(int16_t x,int16_t y,int16_t h,uint16_t color) override;
+ void writeFastHLine(int16_t x,int16_t y,int16_t w,uint16_t color) override;
  // Only portrait 0/180 degrees is supported; never silently switch UI dimensions.
  void setRotation(uint8_t value) override;
 private:

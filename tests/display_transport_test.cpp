@@ -11,6 +11,19 @@ int main(){PortraitDisplay lcd;lcd.begin();assert(lcd.width()==240&&lcd.height()
  for(unsigned i=0;i<sizeof prefix;i++)assert(SpiSpy::bytes[i].value==prefix[i]);
  assert(SpiSpy::delays.size()==3&&SpiSpy::delays[0]==120&&SpiSpy::delays[1]==120&&SpiSpy::delays[2]==20);
  assert(SpiSpy::pins[0]==12&&SpiSpy::pins[1]==13&&SpiSpy::pins[2]==11&&SpiSpy::pins[3]==10&&SpiSpy::hz==40000000);
+ // Exercise the public API through the GFX base class, as bootStatus does.
+ // A full screen must use one address window + 76800 RGB565 pixels, rather
+ // than 76800 windows/transactions. This fails on the V1.3.0 driver.
+ SpiSpy::bytes.clear();Adafruit_GFX&gfx=lcd;gfx.fillScreen(0x0842);
+ assert(SpiSpy::bytes.size()==11+240*320*2);
+ unsigned windows=0;for(const auto&b:SpiSpy::bytes)if(!b.data)windows++;
+ assert(windows==3);
+ for(unsigned i=11;i<SpiSpy::bytes.size();i+=2)assert(SpiSpy::bytes[i].value==0x08&&SpiSpy::bytes[i+1].value==0x42);
+ SpiSpy::bytes.clear();gfx.fillRect(-1,-1,4,4,0x1234);assert(SpiSpy::bytes.size()==11+3*3*2);
+ SpiSpy::bytes.clear();gfx.drawFastVLine(239,318,8,0x1234);assert(SpiSpy::bytes.size()==15);
+ SpiSpy::bytes.clear();gfx.drawFastHLine(238,319,8,0x1234);assert(SpiSpy::bytes.size()==15);
+ SpiSpy::bytes.clear();gfx.writeFastVLine(0,0,3,0xabcd);assert(SpiSpy::bytes.size()==17);
+ SpiSpy::bytes.clear();gfx.writeFastHLine(0,0,1,0xabcd);assert(SpiSpy::bytes.size()==13);
  SpiSpy::bytes.clear();alignas(4) const uint16_t colors[]={0xf800,0x07e0,0x001f,0xffff};lcd.pushRect(1,2,2,2,colors);
  const uint8_t expected[]={0x2a,0,1,0,2,0x2b,0,2,0,3,0x2c,0xf8,0,0x07,0xe0,0,0x1f,0xff,0xff};
  assert(SpiSpy::bytes.size()==sizeof expected);for(unsigned i=0;i<sizeof expected;i++){assert(SpiSpy::bytes[i].value==expected[i]);assert(SpiSpy::bytes[i].data==(i!=0&&i!=5&&i!=10));}
@@ -20,5 +33,5 @@ int main(){PortraitDisplay lcd;lcd.begin();assert(lcd.width()==240&&lcd.height()
  SpiSpy::bytes.clear();lcd.pushRect(239,0,2,2,colors);lcd.pushRect(0,319,2,2,colors);lcd.pushRect(-1,0,1,1,colors);lcd.pushRect(0,0,1,1,nullptr);lcd.writePixel(240,0,1);lcd.setRotation(1);assert(SpiSpy::bytes.empty());
  lcd.writeFillRect(-1,-1,2,2,0x1234);assert(SpiSpy::bytes.size()==13&&SpiSpy::bytes[11].value==0x12&&SpiSpy::bytes[12].value==0x34);
  SpiSpy::bytes.clear();lcd.setRotation(2);assert(SpiSpy::bytes.size()==2&&SpiSpy::bytes[0].value==0x36&&SpiSpy::bytes[1].value==0x88);
- printf("LCD transport: actual driver, portrait %u, init/delays/pins, address windows, RGB565 byte order and CS/DC boundaries OK.\n",LCD_ROTATION);
+ printf("LCD transport: actual driver, portrait %u, public GFX bulk fills/lines, init/delays/pins, address windows, RGB565 byte order and CS/DC boundaries OK.\n",LCD_ROTATION);
 }

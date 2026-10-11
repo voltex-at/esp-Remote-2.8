@@ -10,3 +10,6 @@ firmware/*.bin
 firmware/SHA256SUMS.txt
 remote/cc*.s
 remote/cc*.o
+remote/cc*.c
+remote/cc*.ld
+remote/cc*.le
