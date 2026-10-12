@@ -6,9 +6,20 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <initializer_list>
+#include <string>
 extern "C" int __lsan_is_turned_off(){return 1;} // restricted executor has no /proc thread access
 static void flush(lv_disp_drv_t*d,const lv_area_t*,lv_color_t*){lv_disp_flush_ready(d);}
 static Command sent[32];static int sentCount=0;static bool capture=false;
+static lv_point_t pointerPos={0,0};static bool pointerDown=false;
+static void pointerRead(lv_indev_drv_t*,lv_indev_data_t*d){d->point=pointerPos;d->state=pointerDown?LV_INDEV_STATE_PRESSED:LV_INDEV_STATE_RELEASED;}
+static void pointerStep(int x,int y,bool down){pointerPos={lv_coord_t(x),lv_coord_t(y)};pointerDown=down;lv_tick_inc(40);lv_timer_handler();}
+static void tap(int x,int y){pointerStep(x,y,true);pointerStep(x,y,true);pointerStep(x,y,false);pointerStep(x,y,false);}
+static lv_obj_t*scrollBody(){for(uint32_t i=0;i<lv_obj_get_child_cnt(lv_scr_act());i++){auto*c=lv_obj_get_child(lv_scr_act(),i);if(lv_obj_check_type(c,&lv_obj_class)&&lv_obj_has_flag(c,LV_OBJ_FLAG_SCROLLABLE)&&lv_obj_get_scroll_dir(c)==LV_DIR_VER)return c;}return nullptr;}
+static void checkTargets(lv_obj_t*p){
+ if(lv_obj_check_type(p,&lv_keyboard_class)){auto*kb=(lv_btnmatrix_t*)p;assert(kb->btn_cnt==20);for(int i=0;i<20;i++){assert(lv_area_get_width(&kb->button_areas[i])>=44);assert(lv_area_get_height(&kb->button_areas[i])>=44);}}
+ else if(lv_obj_has_flag(p,LV_OBJ_FLAG_CLICKABLE)&&p->spec_attr&&p->spec_attr->event_dsc_cnt){lv_area_t a;lv_obj_get_click_area(p,&a);if(lv_area_get_width(&a)<44||lv_area_get_height(&a)<44)fprintf(stderr,"Small target %dx%d\n",lv_area_get_width(&a),lv_area_get_height(&a));assert(lv_area_get_width(&a)>=44&&lv_area_get_height(&a)>=44);}
+ for(uint32_t i=0;i<lv_obj_get_child_cnt(p);i++)checkTargets(lv_obj_get_child(p,i));
+}
 static void command(Action a,int value,const char*t){if(capture){assert(sentCount<32);sent[sentCount]={a,value,{0}};snprintf(sent[sentCount++].text,128,"%s",t?t:"");}}
 static lv_obj_t*findLabel(lv_obj_t*parent,const char*text){if(lv_obj_check_type(parent,&lv_label_class)&&!strcmp(lv_label_get_text(parent),text))return parent;for(uint32_t i=0;i<lv_obj_get_child_cnt(parent);i++)if(auto*o=findLabel(lv_obj_get_child(parent,i),text))return o;return nullptr;}
 static lv_obj_t*findType(lv_obj_t*parent,const lv_obj_class_t*type){if(lv_obj_check_type(parent,type))return parent;for(uint32_t i=0;i<lv_obj_get_child_cnt(parent);i++)if(auto*o=findType(lv_obj_get_child(parent,i),type))return o;return nullptr;}
@@ -30,6 +41,25 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
   Ui::show(Screen::Display);Ui::update(s);lv_obj_update_layout(lv_scr_act());auto*dim=findLabel(lv_scr_act(),dimNames[lang]);auto*value=findLabel(lv_scr_act(),"60");assert(dim&&value);lv_area_t a,b;lv_obj_get_coords(dim,&a);lv_obj_get_coords(value,&b);assert(a.y2<b.y1);
   Ui::show(Screen::WifiNetworks);Ui::update(s);click("Home-24G");auto*input=findType(lv_scr_act(),&lv_textarea_class);assert(input&&lv_textarea_get_password_mode(input));lv_textarea_set_text(input,"Example-Password");char name[512];snprintf(name,sizeof name,"%s/wifi_password_%d.ppm",argv[1],lang);save(name);lv_event_send(findType(lv_scr_act(),&lv_keyboard_class),LV_EVENT_CANCEL,nullptr);Ui::update(s);
  }
+ // Every submenu target, bottom-of-list reachability and sibling spacing in
+ // all languages. Home is independently compared pixel-for-pixel by Python.
+ for(int lang=0;lang<3;lang++){
+  s.settings.language=lang;Ui::update(s);
+  for(auto screen:screens){if(screen==Screen::Home)continue;Ui::show(screen);Ui::update(s);lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());
+   if(auto*panel=scrollBody()){
+    for(uint32_t a=0;a<lv_obj_get_child_cnt(panel);a++)for(uint32_t b=a+1;b<lv_obj_get_child_cnt(panel);b++){
+     lv_area_t x,y;lv_obj_get_coords(lv_obj_get_child(panel,a),&x);lv_obj_get_coords(lv_obj_get_child(panel,b),&y);
+     bool overlap=x.x1<=y.x2&&y.x1<=x.x2&&x.y1<=y.y2&&y.y1<=x.y2;
+     if(overlap)fprintf(stderr,"Overlapping siblings screen=%d language=%d children=%u,%u\n",int(screen),lang,a,b);assert(!overlap);
+    }
+    if(lv_obj_get_scroll_bottom(panel)>0){lv_obj_scroll_to_y(panel,lv_obj_get_scroll_y(panel)+lv_obj_get_scroll_bottom(panel),LV_ANIM_OFF);lv_obj_update_layout(lv_scr_act());
+     auto*last=lv_obj_get_child(panel,-1);lv_area_t a,b;lv_obj_get_coords(last,&a);lv_obj_get_coords(panel,&b);assert(a.y2<=b.y2&&a.y2>=b.y1);
+     char name[512];snprintf(name,sizeof name,"%s/scroll_%d_%d.ppm",argv[1],lang,int(screen));save(name);
+    }
+   }
+  }
+ }
+ puts("Large UI: all submenu touch targets >=44px, sibling spacing and last-item scroll reachability PL/DE/EN OK.");
  // Exercise the actual LVGL callbacks, without any real Wi-Fi or saved credentials.
  capture=true;s.settings.language=0;Ui::update(s);const char*choices[]={"Deutsch","Polski","English"};const int codes[]={1,0,2};
  // The theme is disabled, so slider track, indicator and knob must have
@@ -44,11 +74,30 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  sentCount=0;click("Home-24G");auto*input=findType(lv_scr_act(),&lv_textarea_class);auto*kb=findType(lv_scr_act(),&lv_keyboard_class);assert(input&&kb&&lv_textarea_get_password_mode(input));assert(!strlen(lv_textarea_get_text(input)));
  pressKey(kb,"a");pressKey(kb,"b");pressKey(kb,LV_SYMBOL_BACKSPACE);assert(!strcmp(lv_textarea_get_text(input),"a"));pressKey(kb,"ABC");pressKey(kb,"A");pressKey(kb,"1#");pressKey(kb,"1");assert(!strcmp(lv_textarea_get_text(input),"aA1"));pressKey(kb,"abc");
  lv_textarea_set_text(input,"short");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==0&&findType(lv_scr_act(),&lv_textarea_class));
- click("Pokaż");assert(!lv_textarea_get_password_mode(input));click("Ukryj");assert(lv_textarea_get_password_mode(input));
+ click(LV_SYMBOL_EYE_OPEN);assert(!lv_textarea_get_password_mode(input));click(LV_SYMBOL_EYE_CLOSE);assert(lv_textarea_get_password_mode(input));
  lv_textarea_set_text(input,"Example-Password");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==4&&sent[0].value==NetworkMode&&!strcmp(sent[0].text,"1")&&sent[1].value==WifiSsid&&!strcmp(sent[1].text,"Home-24G")&&sent[2].value==WifiPassword&&!strcmp(sent[2].text,"Example-Password")&&sent[3].action==Action::Connect);Ui::update(s);assert(Ui::current()==Screen::Network);
  Ui::show(Screen::WifiNetworks);sentCount=0;click("Home-24G");click("×");assert(sentCount==0);Ui::update(s);
  Ui::show(Screen::WifiNetworks);sentCount=0;click("Home-24G");input=findType(lv_scr_act(),&lv_textarea_class);kb=findType(lv_scr_act(),&lv_keyboard_class);lv_textarea_set_text(input,"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==0);lv_textarea_set_text(input,"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");pressKey(kb,LV_SYMBOL_OK);assert(sentCount==4&&strlen(sent[2].text)==64);Ui::update(s);
- Ui::show(Screen::WifiNetworks);sentCount=0;click("Guest");assert(sentCount==4&&sent[2].value==WifiPassword&&!strlen(sent[2].text)&&sent[3].action==Action::Connect);Ui::update(s);capture=false;
+ Ui::show(Screen::WifiNetworks);sentCount=0;click("Guest");assert(sentCount==4&&sent[2].value==WifiPassword&&!strlen(sent[2].text)&&sent[3].action==Action::Connect);Ui::update(s);
+ // Every printable ASCII character is reachable on the large paged keyboard;
+ // page controls never become part of the password, and each key is >=44x44.
+ Ui::show(Screen::WifiNetworks);click("Home-24G");input=findType(lv_scr_act(),&lv_textarea_class);kb=findType(lv_scr_act(),&lv_keyboard_class);bool covered[127]={};
+ const char*routes[]={"","n-z","ABC","A-M","1#","#+","?+"};
+ for(auto*route:routes){lv_textarea_set_text(input,"");if(*route)pressKey(kb,route);assert(!strlen(lv_textarea_get_text(input)));lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());std::string expected;
+  for(int i=0;i<20;i++){const char*t=lv_btnmatrix_get_btn_text(kb,i);if(strlen(t)==1){unsigned char c=t[0];assert(c>=32&&c<=126);covered[c]=true;expected+=char(c);pressKey(kb,t);}}
+  assert(expected==lv_textarea_get_text(input));
+ }
+ for(int c=32;c<=126;c++)assert(covered[c]);lv_event_send(kb,LV_EVENT_CANCEL,nullptr);Ui::update(s);capture=false;
+ // Real pointer input verifies the enlarged row and the switch itself each
+ // dispatch exactly once, dragging scrolls without an accidental activation,
+ // and a disabled camera control cannot be enabled by tapping its label.
+ static lv_indev_drv_t ptr;lv_indev_drv_init(&ptr);ptr.type=LV_INDEV_TYPE_POINTER;ptr.read_cb=pointerRead;lv_indev_drv_register(&ptr);capture=true;
+ Ui::show(Screen::Alerts);Ui::update(s);lv_obj_update_layout(lv_scr_act());auto*sw=findType(lv_scr_act(),&lv_switch_class);assert(sw);auto*r=lv_obj_get_parent(sw);lv_area_t ra,sa;lv_obj_get_coords(r,&ra);lv_obj_get_coords(sw,&sa);bool old=lv_obj_has_state(sw,LV_STATE_CHECKED);sentCount=0;tap(ra.x1+70,ra.y1+24);assert(sentCount==1&&sent[0].action==Action::Setting&&sent[0].value==Notifications&&atoi(sent[0].text)==!old);
+ sentCount=0;tap((sa.x1+sa.x2)/2,(sa.y1+sa.y2)/2);assert(sentCount==1&&atoi(sent[0].text)==old);
+ Ui::show(Screen::CameraSettings);Ui::update(s);lv_obj_update_layout(lv_scr_act());sw=findType(lv_scr_act(),&lv_switch_class);assert(lv_obj_has_state(sw,LV_STATE_DISABLED));lv_obj_get_coords(lv_obj_get_parent(sw),&ra);sentCount=0;tap(ra.x1+70,ra.y1+24);assert(sentCount==0);
+ Ui::show(Screen::Settings);Ui::update(s);auto*panel=scrollBody();assert(panel);sentCount=0;pointerStep(90,220,true);pointerStep(90,190,true);pointerStep(90,155,true);pointerStep(90,120,true);pointerStep(90,100,false);pointerStep(90,100,false);assert(lv_obj_get_scroll_y(panel)>20&&sentCount==0&&Ui::current()==Screen::Settings);
+ Ui::show(Screen::System);Ui::update(s);click("Ustawienia fabryczne");lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());char resetName[512];snprintf(resetName,sizeof resetName,"%s/reset_dialog.ppm",argv[1]);save(resetName);assert(sentCount==0);Ui::show(Screen::Home);
+ capture=false;puts("Large keyboard: all ASCII, real pointer taps, disabled controls, drag scrolling and reset confirmation OK.");
  const WifiScanState scans[]={WifiScanState::Scanning,WifiScanState::Done,WifiScanState::Failed};const char*scanNames[]={"wifi_scanning","wifi_empty","wifi_error"};
  for(int i=0;i<3;i++){s.wifiScan=scans[i];s.networkCount=0;s.wifiScanGeneration++;Ui::update(s);Ui::show(Screen::WifiNetworks);char name[512];snprintf(name,sizeof name,"%s/%s.ppm",argv[1],scanNames[i]);save(name);}
  // Actual OTA UI callbacks: check does not install; install requires two clicks

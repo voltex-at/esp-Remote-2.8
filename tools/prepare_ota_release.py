@@ -22,9 +22,9 @@ def metadata(app, version):
     return dict(schema=1, target=TARGET, version=version, size=len(app),
                 sha256=hashlib.sha256(app).hexdigest(),
                 url=f'https://github.com/{REPOSITORY}/releases/download/v{version}/firmware.bin',
-                notes={'pl':'Naprawa HTTPS OTA: nowe certyfikaty CA, błędy DNS/TLS/HTTP. Zachowano czytelny interfejs.',
-                       'de':'HTTPS-OTA: neue CA-Zertifikate, DNS/TLS/HTTP-Diagnose. Gut lesbare Oberfläche bleibt.',
-                       'en':'HTTPS OTA fix: updated CA roots, DNS/TLS/HTTP diagnostics. Clear interface retained.'})
+                notes={'pl':'Większy tekst i dotyk na podstronach, duża klawiatura. Strona główna bez zmian. HTTPS OTA zachowane.',
+                       'de':'Größere Schrift/Touchflächen, große Tastatur. Startseite unverändert. HTTPS OTA bleibt.',
+                       'en':'Larger submenu text and touch targets, large keyboard. Home unchanged. HTTPS OTA retained.'})
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--out',type=Path,default=ROOT/'release');a=p.parse_args()
@@ -38,7 +38,9 @@ def main():
     (out/'ota.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     for name in ('PILOT_LCD_TEST_APP.bin','PILOT_LCD_TEST_FULL.bin'):
         shutil.copy2(ROOT/'firmware'/name,out/name)
-    (out/'notes.md').write_text(f'''ESP Remote v{version}: poprawka HTTPS OTA. Własny zestaw publicznych CA obejmuje nowe rooty Sectigo E46/R46, których brakowało w starym SDK. Zachowano weryfikację certyfikatu i hosta. Nowe komunikaty rozróżniają DNS, połączenie, TLS z kodem, HTTP 404/403/429 i przekierowania. Log USB 115200 pokazuje etap/kody bez haseł i tokenów. Pierwsze sprawdzenie czeka do 15 s na NTP.
+    (out/'notes.md').write_text(f'''ESP Remote v{version}: większe napisy i pola dotykowe na podstronach. Strona główna zachowana piksel w piksel PL/DE/EN. Opisy 20 px, wartości/objaśnienia zwykle 18 px; wiersze minimum 64 px. Większe przyciski Wstecz, skanu, OTA i kamery. Cały wiersz przełącznika jest aktywny; przewijane listy nie ściskają tekstu. Klawiatura 5×4 z dużymi klawiszami na stronach, wszystkie drukowalne znaki ASCII, ikona oka i zachowane maskowanie hasła. Szczegóły i podgląd: docs/LARGE_TOUCH_V1_3_4.md.
+
+Zachowano HTTPS OTA z V1.3.3, certyfikaty CA, rozróżnianie DNS/TLS/HTTP, weryfikację obrazu i dwukrokowe potwierdzenie instalacji. Testy obejmują rzeczywisty LVGL, geometrię, przewijanie, wejście wskaźnika i porównanie strony głównej. Test na fizycznym pilocie nie został wykonany.
 
 Jeśli V1.3.1/V1.3.2 nie może połączyć się z GitHub przez HTTPS, tę poprawkę wgraj jednorazowo przez USB. Po dotychczasowej instalacji merged i przed udanym OTA: firmware.bin pod 0x10000, bez kasowania pamięci — zachowuje ustawienia. firmware-merged.bin pod 0x0 to czysta instalacja i usuwa ustawienia. Sam zapis pod 0x10000 nie przełącza aktywnego slotu, jeśli wcześniejsze OTA wybrało inny. Szczegóły: docs/OTA_FIX_V1_3_3.md.
 
