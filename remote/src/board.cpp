@@ -39,7 +39,7 @@ bool begin(){
  pinMode(Pins::touchIrq,INPUT_PULLUP);pinMode(Pins::boot,INPUT_PULLUP);pinMode(Pins::ampEnable,OUTPUT);digitalWrite(Pins::ampEnable,HIGH);
  auto* buf=(lv_color_t*)heap_caps_malloc(240*24*sizeof(lv_color_t),MALLOC_CAP_8BIT|MALLOC_CAP_INTERNAL);if(!buf){Serial.println("[LVGL] draw buffer allocation failed");return false;}
  lv_disp_draw_buf_init(&drawbuf,buf,nullptr,240*24);
- static lv_disp_drv_t disp;lv_disp_drv_init(&disp);disp.hor_res=240;disp.ver_res=320;disp.flush_cb=flush;disp.draw_buf=&drawbuf;if(!lv_disp_drv_register(&disp))return false;
+ static lv_disp_drv_t disp;lv_disp_drv_init(&disp);disp.hor_res=240;disp.ver_res=320;disp.sw_rotate=1;disp.flush_cb=flush;disp.draw_buf=&drawbuf;if(!lv_disp_drv_register(&disp))return false;
  static lv_indev_drv_t touch;lv_indev_drv_init(&touch);touch.type=LV_INDEV_TYPE_POINTER;touch.read_cb=readTouch;if(!lv_indev_drv_register(&touch))return false;
  analogReadResolution(12);analogSetPinAttenuation(Pins::battery,ADC_11db);
  return true;

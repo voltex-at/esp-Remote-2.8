@@ -6,11 +6,17 @@ namespace Video {
 constexpr int width=320,height=240,pixels=width*height;
 constexpr size_t bytes=pixels*sizeof(uint16_t);
 struct View {int zoom,x,y,width,height;};
+struct CameraLayout {int width,height,toolbarY,mediaY,settingsX,volumeX;View image;int emptyY,emptyHeight;};
 inline View view(bool wholeFrame,int viewportWidth=240,int viewportHeight=320){
  int zx=viewportWidth*256/width,zy=viewportHeight*256/height;
  int zoom=wholeFrame?std::min(zx,zy):std::max((viewportWidth*256+width-1)/width,(viewportHeight*256+height-1)/height);
  int w=width*zoom/256,h=height*zoom/256;
  return {zoom,(viewportWidth-w)/2,(viewportHeight-h)/2,w,h};
+}
+inline CameraLayout cameraLayout(bool fullscreen){
+ if(fullscreen)return {320,240,32,188,212,268,view(true,320,240),80,104};
+ auto image=view(true,240,180);image.y+=84;
+ return {240,320,32,268,128,188,image,92,164};
 }
 // Decoder callback uses this same mapping for QVGA/VGA input, with complete
 // frame bounds checked before indexing the PSRAM buffer.

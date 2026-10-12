@@ -20,9 +20,11 @@ static lv_obj_t *batteryStatus=nullptr;
 static Screen connectionBack=Screen::Home,wifiListBack=Screen::WifiSettings,pairBack=Screen::WifiSettings,bluetoothBack=Screen::AddSensor;
 struct BatteryIcon {lv_obj_t *holder=nullptr,*shell=nullptr,*cap=nullptr,*bars[4]={},*bolt=nullptr;};static BatteryIcon topBattery,detailBattery;
 static lv_chart_series_t*series;static lv_color_t*imageBuf=nullptr;
-static bool frameReady=false,liveFit=false,hudVisible=true,volumeOpen=false;
+static bool frameReady=false,liveFullscreen=false,hudVisible=true,volumeOpen=false;
+static lv_obj_t*liveHeader=nullptr,*liveBack=nullptr,*liveToggle=nullptr,*liveVolume=nullptr,*liveConnect=nullptr;
+static bool headerHome=false;
 static lv_obj_t*liveHud=nullptr,*liveEmpty=nullptr,*liveEmptyTitle=nullptr,*liveEmptyHint=nullptr,*liveStatus=nullptr,*liveSettings=nullptr,*liveButtons[4]={},*liveGlyphs[4]={},*volumeSlider=nullptr;
-static void openVolume();static void closeVolume();static void refreshLive();static void positionLive();
+static void openVolume();static void closeVolume();static void refreshLive();static void positionLive();static void makeHeader(lv_obj_t*,bool);static void layoutHeader();
 static lv_obj_t *otaCheckButton=nullptr,*otaInstallButton=nullptr,*otaProgress=nullptr,*otaPercent=nullptr;
 static bool otaConfirm=false;static char otaSelected[24]={};
 static lv_img_dsc_t liveImage={{LV_IMG_CF_TRUE_COLOR,0,0,Video::width,Video::height},Video::bytes,nullptr};
@@ -56,18 +58,38 @@ static lv_obj_t*flowText(const char*s,const lv_font_t*f=&font_body18,uint32_t c=
 static lv_obj_t*icon(lv_obj_t*p,const lv_img_dsc_t*i,int x,int y,uint32_t c=TEXT,int zoom=256){auto*o=lv_img_create(p);lv_img_set_src(o,i);lv_obj_clear_flag(o,LV_OBJ_FLAG_CLICKABLE);lv_obj_set_pos(o,x,y);lv_img_set_zoom(o,zoom);lv_obj_set_style_img_recolor(o,col(c),0);lv_obj_set_style_img_recolor_opa(o,LV_OPA_COVER,0);return o;}
 static lv_obj_t*box(lv_obj_t*p,int x,int y,int w,int h,uint32_t bg=CARD){auto*o=lv_obj_create(p);style(o,bg);lv_obj_set_pos(o,x,y);lv_obj_set_size(o,w,h);lv_obj_clear_flag(o,LV_OBJ_FLAG_SCROLLABLE);return o;}
 static BatteryIcon batteryIcon(lv_obj_t*p,int x,int y,int w,int h,uint32_t ink){
- BatteryIcon b;auto*holder=box(p,x,y,w,h,BG);b.holder=holder;style(holder,BG,0,0);lv_obj_set_style_bg_opa(holder,LV_OPA_TRANSP,0);lv_obj_clear_flag(holder,LV_OBJ_FLAG_CLICKABLE);
- int sw=w*2/3,sh=h-4;b.shell=box(holder,0,2,sw,sh,BG);style(b.shell,BG,3,1);lv_obj_set_style_bg_opa(b.shell,LV_OPA_TRANSP,0);lv_obj_set_style_border_width(b.shell,h>=40?2:1,0);lv_obj_set_style_border_color(b.shell,col(ink),0);lv_obj_clear_flag(b.shell,LV_OBJ_FLAG_CLICKABLE);
- b.cap=box(holder,sw,sh/3+2,2,sh/3,ink);style(b.cap,ink,1,0);lv_obj_clear_flag(b.cap,LV_OBJ_FLAG_CLICKABLE);
- int bw=std::max(2,(sw-8)/4);for(int i=0;i<4;i++){b.bars[i]=box(b.shell,3+i*(bw+1),3,bw,std::max(3,sh-6),LIME);style(b.bars[i],LIME,1,0);lv_obj_clear_flag(b.bars[i],LV_OBJ_FLAG_CLICKABLE);}
- b.bolt=icon(holder,&img_bolt,sw+2,h/5,LIME,h*153/28);lv_img_set_pivot(b.bolt,0,0);return b;
+ BatteryIcon b;int sw=w*2/3,sh=h-4,border=h>=40?2:1,boltSize=std::max(8,h*3/5);int holderWidth=std::max(w,sw+5+boltSize);
+ auto*holder=box(p,x,y,holderWidth,h,BG);b.holder=holder;style(holder,BG,0,0);lv_obj_set_style_bg_opa(holder,LV_OPA_TRANSP,0);lv_obj_clear_flag(holder,LV_OBJ_FLAG_CLICKABLE);
+ b.shell=box(holder,0,2,sw,sh,BG);style(b.shell,BG,3,border);lv_obj_set_style_bg_opa(b.shell,LV_OPA_TRANSP,0);lv_obj_set_style_border_width(b.shell,border,0);lv_obj_set_style_border_color(b.shell,col(ink),0);lv_obj_clear_flag(b.shell,LV_OBJ_FLAG_CLICKABLE);
+ int capHeight=std::max(3,sh/3);b.cap=box(holder,sw,(h-capHeight)/2,2,capHeight,ink);style(b.cap,ink,1,0);lv_obj_clear_flag(b.cap,LV_OBJ_FLAG_CLICKABLE);
+ int bw=std::max(1,(sw-2*border-4-3)/4);for(int i=0;i<4;i++){b.bars[i]=box(b.shell,(sw-2*border-(4*bw+3))/2+i*(bw+1),2,bw,std::max(2,sh-2*border-4),LIME);style(b.bars[i],LIME,1,0);lv_obj_clear_flag(b.bars[i],LV_OBJ_FLAG_CLICKABLE);}
+ b.bolt=icon(holder,&img_bolt,sw+5,(h-boltSize)/2,LIME,boltSize*256/28);lv_img_set_pivot(b.bolt,0,0);return b;
+}
+// Center the visible glyphs (digits/percent/time), rather than the font's
+// descender space. This keeps the text optically level with battery and Wi-Fi.
+static int glyphCenterY(const char*text,const lv_font_t*f,int center){int top=10000,bottom=-10000;uint32_t offset=0;while(text[offset]){uint32_t c=_lv_txt_encoded_next(text,&offset);lv_font_glyph_dsc_t g;if(lv_font_get_glyph_dsc(f,&g,c,0)&&g.box_h){int y=f->line_height-f->base_line-g.box_h-g.ofs_y;top=std::min(top,y);bottom=std::max(bottom,y+int(g.box_h));}}return bottom>=top?center-(top+bottom)/2:center-f->line_height/2;}
+static void makeHeader(lv_obj_t*p,bool home){headerHome=home;int center=home?18:12;
+ clockLabel=label(p,data.timeText,10,0,home?80:55,home?&font_ui22:&font_ui14,page==Screen::Live?0xffffff:TEXT);
+ wifiIcon=icon(p,&img_wifi,0,0,data.wifi?TEXT:MUTED,home?256:170);lv_img_set_pivot(wifiIcon,0,0);
+ topBattery=batteryIcon(p,0,0,home?40:28,home?22:16,page==Screen::Live?0xffffff:TEXT);
+ batteryLabel=label(p,"—",0,0,home?48:38,home?&font_ui16:&font_ui12,page==Screen::Live?0xffffff:TEXT);lv_obj_set_style_text_align(batteryLabel,LV_TEXT_ALIGN_RIGHT,0);
+ lv_obj_set_y(clockLabel,glyphCenterY(data.timeText,lv_obj_get_style_text_font(clockLabel,0),center));
+}
+static void layoutHeader(){if(!clockLabel||!batteryLabel||!topBattery.shell)return;int center=headerHome?18:12,width=lv_disp_get_hor_res(nullptr);uint32_t ink=page==Screen::Live?0xffffff:TEXT;
+ char b[12];if(data.batteryPct>=0)snprintf(b,sizeof b,"%d%%",data.batteryPct);else snprintf(b,sizeof b,"—");lv_label_set_text(batteryLabel,b);lv_obj_set_x(batteryLabel,width-8-lv_obj_get_width(batteryLabel));auto*f=lv_obj_get_style_text_font(batteryLabel,0);lv_obj_set_y(batteryLabel,glyphCenterY(b,f,center));
+ int textWidth=lv_txt_get_width(b,strlen(b),f,0,LV_TEXT_FLAG_NONE),visible=lv_obj_get_width(topBattery.shell)+2;if(data.batteryPower!=Battery::Power::Battery&&data.batteryPct>=0)visible=lv_obj_get_width(topBattery.holder);
+ int batteryX=width-8-textWidth-4-visible;lv_obj_set_pos(topBattery.holder,batteryX,center-lv_obj_get_height(topBattery.holder)/2);
+ int wifiSize=28*lv_img_get_zoom(wifiIcon)/256;lv_obj_set_pos(wifiIcon,batteryX-8-wifiSize,center-wifiSize/2);lv_obj_set_style_img_recolor(wifiIcon,col(page==Screen::Live?0xffffff:data.wifi?TEXT:MUTED),0);
+ lv_label_set_text(clockLabel,data.timeText);lv_obj_set_y(clockLabel,glyphCenterY(data.timeText,lv_obj_get_style_text_font(clockLabel,0),center));lv_obj_set_style_text_color(batteryLabel,col(ink),0);
 }
 static void updateBatteryIcon(BatteryIcon&b,uint32_t ink){if(!b.shell)return;
  lv_obj_set_style_border_color(b.shell,col(ink),0);lv_obj_set_style_bg_color(b.cap,col(ink),0);
  int count=Battery::segments(data.batteryPct,data.batteryPower,lv_tick_get());
- uint32_t fill=data.batteryPct<=15&&data.batteryPower==Battery::Power::Battery?RED:LIME;
+ uint32_t fill=data.batteryPct<=15&&data.batteryPower==Battery::Power::Battery?(page==Screen::Live?0xff6878:RED):(page==Screen::Live?0xa4f84e:LIME);
+ lv_obj_set_style_img_recolor(b.bolt,col(page==Screen::Live?0xa4f84e:LIME),0);
  for(int i=0;i<4;i++){lv_obj_set_style_bg_color(b.bars[i],col(i<count?fill:TRACK),0);lv_obj_set_style_bg_opa(b.bars[i],i<count?LV_OPA_COVER:LV_OPA_40,0);}
  if(data.batteryPower!=Battery::Power::Battery&&data.batteryPct>=0)lv_obj_clear_flag(b.bolt,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(b.bolt,LV_OBJ_FLAG_HIDDEN);
+ if(b.holder==detailBattery.holder){int visible=lv_obj_has_flag(b.bolt,LV_OBJ_FLAG_HIDDEN)?lv_obj_get_width(b.shell)+2:lv_obj_get_width(b.holder);lv_obj_set_x(b.holder,(lv_obj_get_content_width(lv_obj_get_parent(b.holder))-visible)/2);}
 }
 static const char*batteryStateText(){if(data.batteryPct<0)return tr("Brak odczytu","Kein Messwert","No reading");
  if(data.batteryPower==Battery::Power::Charging)return tr("Ładowanie · szacunek","Laden · geschätzt","Charging · estimated");
@@ -126,7 +148,7 @@ static void joinNetwork(int index){if(index<0||index>=data.networkCount)return;a
  lv_label_set_text(editorHint,joinSsid);lv_label_set_long_mode(editorHint,LV_LABEL_LONG_SCROLL_CIRCULAR);
 }
 static void event(lv_event_t*e){auto*b=(Binding*)lv_event_get_user_data(e);auto code=lv_event_get_code(e);auto*o=lv_event_get_target(e);
- if(b->kind==0&&code==LV_EVENT_CLICKED&&!Ota::installing(data.ota.state)){if(b->screen==Screen::Appearance)appearanceBack=page;if(b->screen==Screen::CameraSettings)cameraSettingsBack=page;if(b->screen==Screen::Network&&(page==Screen::Home||page==Screen::Settings))connectionBack=page;if(b->screen==Screen::Pair)pairBack=page;if(b->screen==Screen::Bluetooth)bluetoothBack=page;next(b->screen,b->key);}
+ if(b->kind==0&&code==LV_EVENT_CLICKED&&!Ota::installing(data.ota.state)){if(b->screen==Screen::Appearance)appearanceBack=page;if(b->screen==Screen::CameraSettings)cameraSettingsBack=page;if(b->screen==Screen::Network&&(page==Screen::Home||page==Screen::Settings||page==Screen::Live))connectionBack=page;if(b->screen==Screen::Pair)pairBack=page;if(b->screen==Screen::Bluetooth)bluetoothBack=page;next(b->screen,b->key);}
  if(b->kind==1&&code==LV_EVENT_VALUE_CHANGED){char n[16];snprintf(n,sizeof n,"%d",lv_obj_has_state(o,LV_STATE_CHECKED));send(Action::Setting,b->key,n);}
  if(b->kind==2&&code==LV_EVENT_CLICKED)send(b->action,b->key,b->text);
  if(b->kind==3&&code==LV_EVENT_VALUE_CHANGED)send(Action::CameraControl,lv_obj_has_state(o,LV_STATE_CHECKED),b->text);
@@ -156,7 +178,7 @@ static void event(lv_event_t*e){auto*b=(Binding*)lv_event_get_user_data(e);auto 
  }
  if(b->kind==15&&code==LV_EVENT_CLICKED){auto selected=ThemeSettings::normalize(b->key);if(selected==data.theme)return;send(Action::Setting,Appearance,selected==ThemeMode::Light?"1":"0");next(Screen::Appearance);}
 
- if(b->kind==16&&code==LV_EVENT_CLICKED){liveFit=!liveFit;positionLive();}
+ if(b->kind==16&&code==LV_EVENT_CLICKED){liveFullscreen=!liveFullscreen;hudVisible=!liveFullscreen||!frameReady||!(data.camera||data.playing);next(Screen::Live);}
  if(b->kind==17&&code==LV_EVENT_CLICKED)openVolume();
 
 }
@@ -207,43 +229,49 @@ static lv_obj_t*mediaButton(lv_obj_t*p,const lv_img_dsc_t*src,int x,int y){
  auto*b=button(p,"",x,y,44,44);style(b,0x101820,22,0);lv_obj_set_style_bg_opa(b,LV_OPA_80,0);lv_obj_set_style_border_color(b,col(0xffffff),0);lv_obj_set_style_border_width(b,1,0);lv_obj_set_style_border_opa(b,LV_OPA_40,0);lv_obj_set_style_bg_color(b,col(0x35495b),LV_STATE_PRESSED);lv_obj_set_style_bg_color(b,col(0x101820),LV_STATE_DISABLED);lv_obj_set_style_opa(b,LV_OPA_40,LV_STATE_DISABLED);icon(b,src,8,8,0xffffff);return b;
 }
 static void closeVolume(){if(overlay)lv_obj_del(overlay);overlay=nullptr;volumeSlider=nullptr;volumeOpen=false;}
-static void openVolume(){if(volumeOpen)return;volumeOpen=true;
- overlay=box(root,0,24,240,296,0x101820);style(overlay,0x101820,0,0);lv_obj_set_style_bg_opa(overlay,LV_OPA_60,0);lv_obj_move_foreground(overlay);
+static void openVolume(){if(volumeOpen)return;volumeOpen=true;int w=lv_disp_get_hor_res(nullptr),h=lv_disp_get_ver_res(nullptr);
+ overlay=box(root,0,0,w,h,0x101820);style(overlay,0x101820,0,0);lv_obj_set_style_bg_opa(overlay,LV_OPA_60,0);lv_obj_move_foreground(overlay);
  lv_obj_add_event_cb(overlay,[](lv_event_t*e){if(lv_event_get_target(e)==overlay)closeVolume();},LV_EVENT_CLICKED,nullptr);
- auto*c=box(overlay,8,68,224,156);label(c,tr("Głośność","Lautstärke","Volume"),12,12,148,&font_ui20);
+ auto*c=box(overlay,(w-224)/2,(h-156)/2,224,156);label(c,tr("Głośność","Lautstärke","Volume"),12,12,148,&font_ui20);
  auto*close=button(c,"",170,4,44,44);icon(close,&img_close,8,8);lv_obj_add_event_cb(close,[](lv_event_t*){closeVolume();},LV_EVENT_CLICKED,nullptr);
  auto*v=label(c,"",12,47,196,&font_ui22,LIME);lv_label_set_text_fmt(v,"%u%%",data.settings.volume);
  volumeSlider=lv_slider_create(c);lv_obj_set_pos(volumeSlider,20,95);lv_obj_set_size(volumeSlider,180,10);lv_slider_set_range(volumeSlider,0,100);lv_slider_set_value(volumeSlider,data.settings.volume,LV_ANIM_OFF);lv_obj_set_ext_click_area(volumeSlider,18);
  for(auto part:{LV_PART_MAIN,LV_PART_INDICATOR,LV_PART_KNOB}){lv_obj_set_style_bg_opa(volumeSlider,LV_OPA_COVER,part);lv_obj_set_style_radius(volumeSlider,LV_RADIUS_CIRCLE,part);}lv_obj_set_style_bg_color(volumeSlider,col(TRACK),LV_PART_MAIN);lv_obj_set_style_bg_color(volumeSlider,col(LIME),LV_PART_INDICATOR);lv_obj_set_style_bg_color(volumeSlider,col(KNOB),LV_PART_KNOB);lv_obj_set_style_pad_all(volumeSlider,8,LV_PART_KNOB);lv_obj_set_style_border_width(volumeSlider,data.theme==ThemeMode::Light?1:0,LV_PART_KNOB);lv_obj_set_style_border_color(volumeSlider,col(BORDER),LV_PART_KNOB);
  lv_obj_add_event_cb(volumeSlider,[](lv_event_t*e){lv_label_set_text_fmt((lv_obj_t*)lv_event_get_user_data(e),"%d%%",int(lv_slider_get_value(lv_event_get_target(e))));},LV_EVENT_VALUE_CHANGED,v);bind(volumeSlider,4,Volume);
 }
-static void positionLive(){if(!image)return;auto view=Video::view(liveFit);lv_img_set_pivot(image,0,0);lv_img_set_zoom(image,view.zoom);lv_obj_set_pos(image,view.x,view.y);
- int top=liveFit?view.y+6:30,bottom=liveFit?view.y+view.height-50:268;
- if(liveHud){lv_img_set_src(lv_obj_get_child(lv_obj_get_child(liveHud,1),-1),liveFit?&img_expand:&img_minimize);lv_obj_set_pos(lv_obj_get_child(liveHud,0),8,top);lv_obj_set_pos(lv_obj_get_child(liveHud,1),66,top);lv_obj_set_pos(lv_obj_get_child(liveHud,2),188,top);lv_obj_set_pos(liveStatus,114,top+12);for(int i=0;i<4;i++)if(liveButtons[i])lv_obj_set_pos(liveButtons[i],8+i*60,bottom);}
- if(liveSettings)lv_obj_set_pos(liveSettings,188,top+50);
+static void positionLive(){auto view=Video::cameraLayout(liveFullscreen);if(image){lv_img_set_pivot(image,0,0);lv_img_set_zoom(image,view.image.zoom);lv_obj_set_pos(image,view.image.x,view.image.y);}
+ if(liveBack)lv_obj_set_pos(liveBack,8,view.toolbarY);if(liveToggle){lv_img_set_src(lv_obj_get_child(liveToggle,-1),liveFullscreen?&img_minimize:&img_expand);lv_obj_set_pos(liveToggle,68,view.toolbarY);}
+ if(liveVolume)lv_obj_set_pos(liveVolume,view.volumeX,view.toolbarY);if(liveSettings)lv_obj_set_pos(liveSettings,view.settingsX,view.toolbarY);
+ int spacing=liveFullscreen?80:60;for(int i=0;i<4;i++)if(liveButtons[i])lv_obj_set_pos(liveButtons[i],(spacing-44)/2+i*spacing,view.mediaY);
 }
-static void refreshLive(){if(!liveHud)return;
- if(hudVisible)lv_obj_clear_flag(liveHud,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(liveHud,LV_OBJ_FLAG_HIDDEN);
- bool ready=frameReady&&imageBuf&&(data.camera||data.playing);
- if(liveEmptyTitle)lv_label_set_text(liveEmptyTitle,!imageBuf?tr("Brak pamięci obrazu","Bildspeicher fehlt","No video memory"):data.camera||data.playing?tr("Ładowanie obrazu…","Bild wird geladen…","Loading video…"):tr("Brak obrazu","Kein Bild","No video"));
- if(liveEmptyHint){if(data.camera||data.playing)lv_obj_add_flag(liveEmptyHint,LV_OBJ_FLAG_HIDDEN);else lv_obj_clear_flag(liveEmptyHint,LV_OBJ_FLAG_HIDDEN);}
+static void refreshLive(){if(!liveHud)return;bool ready=frameReady&&imageBuf&&(data.camera||data.playing);
+ for(auto*o:{liveHud,liveHeader}){if(hudVisible||!ready)lv_obj_clear_flag(o,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(o,LV_OBJ_FLAG_HIDDEN);}
+ if(image){if(ready)lv_obj_clear_flag(image,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(image,LV_OBJ_FLAG_HIDDEN);}
+ const char*title=!imageBuf?tr("Brak pamięci obrazu","Bildspeicher fehlt","No video memory"):data.camera||data.playing?tr("Ładowanie obrazu…","Bild wird geladen…","Loading video…"):tr("Brak obrazu","Kein Bild","No video");
+ if(liveEmptyTitle){lv_label_set_text(liveEmptyTitle,title);lv_obj_set_style_text_font(liveEmptyTitle,lv_txt_get_width(title,strlen(title),&font_ui20,0,LV_TEXT_FLAG_NONE)>lv_obj_get_width(liveEmptyTitle)?&font_ui18:&font_ui20,0);}
+ for(auto*o:{liveEmptyHint,liveConnect})if(o){if(data.camera||data.playing||!imageBuf)lv_obj_add_flag(o,LV_OBJ_FLAG_HIDDEN);else lv_obj_clear_flag(o,LV_OBJ_FLAG_HIDDEN);}
  if(liveEmpty){if(ready)lv_obj_add_flag(liveEmpty,LV_OBJ_FLAG_HIDDEN);else lv_obj_clear_flag(liveEmpty,LV_OBJ_FLAG_HIDDEN);}
- char text[20];if(data.recording)snprintf(text,sizeof text,"%02lu:%02lu",(unsigned long)(data.clipMs/60000),(unsigned long)(data.clipMs/1000%60));else snprintf(text,sizeof text,"%s",data.playing?tr("Plik","Datei","File"):data.camera?"LIVE":"—");lv_label_set_text(liveStatus,text);lv_obj_set_style_text_color(liveStatus,col(data.recording?0xff6878:0xffffff),0);
+ char text[20];if(data.recording)snprintf(text,sizeof text,"%02lu:%02lu",(unsigned long)(data.clipMs/60000),(unsigned long)(data.clipMs/1000%60));else snprintf(text,sizeof text,"%s",data.playing?tr("Plik","Datei","File"):data.camera?"LIVE":"Offline");lv_label_set_text(liveStatus,text);lv_obj_set_y(liveStatus,glyphCenterY(text,&font_ui12,12));lv_obj_set_style_text_color(liveStatus,col(data.recording?0xff6878:0xffffff),0);
  for(int i=0;i<4;i++)if(liveButtons[i]){bool enabled=i==0||i==3?data.audioCap&&data.camera:i==1?data.camera&&data.sd:data.recording||(data.camera&&data.sd);if(enabled)lv_obj_clear_state(liveButtons[i],LV_STATE_DISABLED);else lv_obj_add_state(liveButtons[i],LV_STATE_DISABLED);}
  if(liveGlyphs[0])lv_obj_set_style_img_recolor(liveGlyphs[0],col(data.talking?0xa4f84e:0xffffff),0);
  if(liveGlyphs[2]){lv_img_set_src(liveGlyphs[2],data.recording?&img_stop:&img_record);lv_obj_set_style_img_recolor(liveGlyphs[2],col(data.recording?0xff6878:0xffffff),0);}
  if(liveGlyphs[3])lv_obj_set_style_img_recolor(liveGlyphs[3],col(data.listening?0xa4f84e:0xffffff),0);
 }
-static void live(){
- auto*frame=box(root,0,0,240,320,0x080b0f);style(frame,0x080b0f,0,0);lv_obj_add_event_cb(frame,[](lv_event_t*){if(hudVisible&&liveHud){lv_point_t p;auto*input=lv_indev_get_act();if(input){lv_indev_get_point(input,&p);for(uint32_t i=0;i<lv_obj_get_child_cnt(liveHud);i++){auto*c=lv_obj_get_child(liveHud,i);if(!lv_obj_check_type(c,&lv_btn_class))continue;lv_area_t a;lv_obj_get_coords(c,&a);if(p.x>=a.x1&&p.x<=a.x2&&p.y>=a.y1&&p.y<=a.y2)return;}}}hudVisible=!hudVisible;refreshLive();},LV_EVENT_CLICKED,nullptr);
+static void live(){auto view=Video::cameraLayout(liveFullscreen);int w=view.width,h=view.height;
+ auto*frame=box(root,0,0,w,h,0x000000);style(frame,0x000000,0,0);lv_obj_add_event_cb(frame,[](lv_event_t*){if(!frameReady||!(data.camera||data.playing))return;hudVisible=!hudVisible;refreshLive();},LV_EVENT_CLICKED,nullptr);
  if(imageBuf){image=lv_img_create(frame);lv_img_set_src(image,&liveImage);lv_obj_clear_flag(image,LV_OBJ_FLAG_CLICKABLE);lv_img_set_antialias(image,true);}
- liveEmpty=box(frame,10,103,220,124,0x101820);style(liveEmpty,0x101820,14,0);lv_obj_clear_flag(liveEmpty,LV_OBJ_FLAG_CLICKABLE);icon(liveEmpty,&img_camera,96,8,0xffffff);auto*l=wrapped(liveEmpty,!imageBuf?tr("Brak pamięci obrazu","Bildspeicher fehlt","No video memory"):data.camera||data.playing?tr("Ładowanie obrazu…","Bild wird geladen…","Loading video…"):tr("Brak obrazu","Kein Bild","No video"),10,45,200,&font_ui20,0xffffff);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);liveEmptyTitle=l;l=wrapped(liveEmpty,tr("Sprawdź połączenie","Verbindung prüfen","Check connection"),10,83,200,&font_body18,0xcbd3da);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);liveEmptyHint=l;
- auto*status=box(frame,0,0,240,24,0x101820);style(status,0x101820,0,0);lv_obj_set_style_bg_opa(status,LV_OPA_80,0);lv_obj_clear_flag(status,LV_OBJ_FLAG_CLICKABLE);clockLabel=label(status,data.timeText,10,5,55,&font_ui14,0xffffff);wifiIcon=icon(status,&img_wifi,147,3,0xffffff,170);lv_img_set_pivot(wifiIcon,0,0);topBattery=batteryIcon(status,170,4,28,16,0xffffff);batteryLabel=label(status,"—",202,6,36,&font_ui12,0xffffff);lv_obj_set_style_text_align(batteryLabel,LV_TEXT_ALIGN_RIGHT,0);
- liveHud=box(frame,0,0,240,320,0);style(liveHud,0,0,0);lv_obj_set_style_bg_opa(liveHud,LV_OPA_TRANSP,0);lv_obj_clear_flag(liveHud,LV_OBJ_FLAG_CLICKABLE);
- auto*back=mediaButton(liveHud,&img_back,8,30);lv_obj_add_event_cb(back,[](lv_event_t*){if(Ota::installing(data.ota.state))return;if(data.playing)send(Action::Play,0,"");next(Screen::Cameras);},LV_EVENT_CLICKED,nullptr);
- auto*fit=mediaButton(liveHud,&img_expand,66,30);bind(fit,16);auto*vol=mediaButton(liveHud,&img_volume,188,30);bind(vol,17);liveStatus=label(liveHud,"LIVE",114,42,66,&font_body18,0xffffff);
- if(!data.playing){liveSettings=mediaButton(liveHud,&img_settings,188,80);bind(liveSettings,0,0,Screen::CameraSettings);}
- if(!data.playing){const lv_img_dsc_t*icons[]={&img_mic,&img_camera,&img_record,&img_speaker};for(int i=0;i<4;i++){auto*b=mediaButton(liveHud,icons[i],8+i*60,268);liveButtons[i]=b;liveGlyphs[i]=lv_obj_get_child(b,-1);if(i==0)bind(b,6);if(i==1)bind(b,2,0,Screen::Home,Action::Snapshot);if(i==2)bind(b,7,0,Screen::Home,Action::Record);if(i==3)bind(b,7,0,Screen::Home,Action::Listen);}}
+ liveEmpty=box(frame,8,view.emptyY,w-16,view.emptyHeight,0x101820);style(liveEmpty,0x101820,14,0);lv_obj_clear_flag(liveEmpty,LV_OBJ_FLAG_CLICKABLE);
+ icon(liveEmpty,&img_camera,liveFullscreen?12:98,10,0xffffff);
+ liveEmptyTitle=label(liveEmpty,"",liveFullscreen?52:12,liveFullscreen?10:47,liveFullscreen?w-80:200,&font_ui20,0xffffff);lv_obj_set_style_text_align(liveEmptyTitle,liveFullscreen?LV_TEXT_ALIGN_LEFT:LV_TEXT_ALIGN_CENTER,0);
+ liveEmptyHint=label(liveEmpty,tr("Sprawdź połączenie","Verbindung prüfen","Check connection"),liveFullscreen?52:12,liveFullscreen?37:81,liveFullscreen?w-80:200,liveFullscreen?&font_ui14:&font_body18,0xcbd3da);lv_obj_set_style_text_align(liveEmptyHint,liveFullscreen?LV_TEXT_ALIGN_LEFT:LV_TEXT_ALIGN_CENTER,0);
+ liveConnect=button(liveEmpty,tr("Połączenie","Verbindung","Connection"),(w-16-192)/2,liveFullscreen?60:112,192,44);lv_obj_set_style_bg_color(liveConnect,col(0xa4f84e),0);lv_obj_set_style_bg_color(liveConnect,col(0x77ce1e),LV_STATE_PRESSED);lv_obj_set_style_text_color(liveConnect,col(0x080b0f),0);lv_obj_set_style_text_align(lv_obj_get_child(liveConnect,0),LV_TEXT_ALIGN_CENTER,0);bind(liveConnect,0,0,Screen::Network);
+ liveHeader=box(frame,0,0,w,24,0x101820);style(liveHeader,0x101820,0,0);lv_obj_set_style_bg_opa(liveHeader,LV_OPA_80,0);lv_obj_clear_flag(liveHeader,LV_OBJ_FLAG_CLICKABLE);makeHeader(liveHeader,false);
+ liveStatus=label(liveHeader,"LIVE",w==320?90:72,4,w==320?76:52,&font_ui12,0xffffff);
+ liveHud=box(frame,0,0,w,h,0);style(liveHud,0,0,0);lv_obj_set_style_bg_opa(liveHud,LV_OPA_TRANSP,0);lv_obj_clear_flag(liveHud,LV_OBJ_FLAG_CLICKABLE);
+ liveBack=mediaButton(liveHud,&img_back,8,32);lv_obj_add_event_cb(liveBack,[](lv_event_t*){if(Ota::installing(data.ota.state))return;if(data.playing)send(Action::Play,0,"");liveFullscreen=false;next(Screen::Cameras);},LV_EVENT_CLICKED,nullptr);
+ liveToggle=mediaButton(liveHud,&img_expand,68,32);bind(liveToggle,16);liveVolume=mediaButton(liveHud,&img_volume,view.volumeX,32);bind(liveVolume,17);
+ if(!data.playing){liveSettings=mediaButton(liveHud,&img_settings,view.settingsX,32);bind(liveSettings,0,0,Screen::CameraSettings);}
+ if(!data.playing){const lv_img_dsc_t*icons[]={&img_mic,&img_camera,&img_record,&img_speaker};for(int i=0;i<4;i++){auto*b=mediaButton(liveHud,icons[i],8+i*60,view.mediaY);liveButtons[i]=b;liveGlyphs[i]=lv_obj_get_child(b,-1);if(i==0)bind(b,6);if(i==1)bind(b,2,0,Screen::Home,Action::Snapshot);if(i==2)bind(b,7,0,Screen::Home,Action::Record);if(i==3)bind(b,7,0,Screen::Home,Action::Listen);}}
  positionLive();refreshLive();
 }
 static const char*shortMetric(int m){switch(m){case 0:return "Temp.";case 1:return tr("Wilgotn.","Feuchte","Humidity");case 2:return "CO₂";case 3:return "IAQ";case 4:return tr("Ciśn.","Druck","Pressure");case 6:return tr("Bateria","Batterie","Battery");default:return "eCO₂";}}
@@ -379,16 +407,13 @@ static void updatePage(){title("Software",Screen::System);makeBody(100);
  otaCheckButton=button(root,tr("Sprawdź","Prüfen","Check"),8,264,108,52);bind(otaCheckButton,13);
  otaInstallButton=button(root,tr("Aktualizuj","Update","Update"),124,264,108,52,true);bind(otaInstallButton,14);
 }
-void show(Screen s,int m){if(s==Screen::Live&&page!=Screen::Live)hudVisible=true;page=s;pending=s;palette();metric=std::max(0,std::min(6,m));rebuild=false;bindCount=0;image=valueLabel=onlineLabel=minLabel=maxLabel=chart=recordLabel=sensorInfo=wave=nullptr;overlay=editor=keyboard=editorHint=revealLabel=nullptr;joiningWifi=false;
+void show(Screen s,int m){if(s==Screen::Live&&page!=Screen::Live){hudVisible=true;if(page!=Screen::CameraSettings&&page!=Screen::Network)liveFullscreen=false;}page=s;pending=s;palette();metric=std::max(0,std::min(6,m));rebuild=false;bindCount=0;image=valueLabel=onlineLabel=minLabel=maxLabel=chart=recordLabel=sensorInfo=wave=nullptr;overlay=editor=keyboard=editorHint=revealLabel=nullptr;joiningWifi=false;
  otaCheckButton=otaInstallButton=otaProgress=otaPercent=nullptr;otaConfirm=false;
  for(auto&v:sensorValues)v=nullptr;for(auto&v:sensorStatusText)v=nullptr;homeTiles=nullptr;
- clockLabel=batteryLabel=wifiIcon=liveSettings=batteryStatus=nullptr;topBattery=BatteryIcon();detailBattery=BatteryIcon();liveHud=liveEmpty=liveEmptyTitle=liveEmptyHint=liveStatus=volumeSlider=nullptr;volumeOpen=false;for(auto&v:liveButtons)v=nullptr;for(auto&v:liveGlyphs)v=nullptr;
+ clockLabel=batteryLabel=wifiIcon=liveSettings=batteryStatus=nullptr;topBattery=BatteryIcon();detailBattery=BatteryIcon();liveHeader=liveBack=liveToggle=liveVolume=liveConnect=nullptr;liveHud=liveEmpty=liveEmptyTitle=liveEmptyHint=liveStatus=volumeSlider=nullptr;volumeOpen=false;for(auto&v:liveButtons)v=nullptr;for(auto&v:liveGlyphs)v=nullptr;
+ auto rotation=s==Screen::Live&&liveFullscreen?LV_DISP_ROT_90:LV_DISP_ROT_NONE;if(lv_disp_get_rotation(nullptr)!=rotation)lv_disp_set_rotation(nullptr,rotation);
  if(!root)root=lv_obj_create(nullptr);else lv_obj_clean(root);body=nullptr;style(root,BG,0,0);lv_obj_set_style_text_font(root,&font_ui14,0);lv_obj_clear_flag(root,LV_OBJ_FLAG_SCROLLABLE);lv_scr_load(root);
- if(s!=Screen::Live){bool home=s==Screen::Home;clockLabel=label(root,data.timeText,10,home?6:5,home?92:55,home?&font_ui22:&font_ui14);
-  wifiIcon=icon(root,&img_wifi,home?114:147,home?3:0,data.wifi?TEXT:MUTED,home?256:170);lv_img_set_pivot(wifiIcon,0,0);
-  topBattery=batteryIcon(root,home?148:170,home?6:4,home?40:28,home?22:16,TEXT);
-  batteryLabel=label(root,"—",home?188:202,home?10:6,home?46:36,home?&font_ui16:&font_ui12);lv_obj_set_style_text_align(batteryLabel,LV_TEXT_ALIGN_RIGHT,0);
- }
+ if(s==Screen::Live)lv_obj_set_style_bg_color(root,col(0x000000),0);else makeHeader(root,s==Screen::Home);
  switch(s){
  case Screen::Home:home();break;case Screen::Live:live();break;case Screen::Sensors:sensors();break;case Screen::AddSensor:addSensor();break;case Screen::SensorValue:sensorValue();break;case Screen::Metric:metricPage();break;case Screen::Settings:settings();break;case Screen::Network:network();break;case Screen::WifiSettings:wifiSettings(false);break;case Screen::Direct:wifiSettings(true);break;case Screen::Bluetooth:bluetoothPage();break;case Screen::Scan:scan();break;case Screen::Recordings:gallery();break;case Screen::WifiNetworks:wifiNetworks();break;case Screen::Languages:languages();break;case Screen::Appearance:appearance();break;case Screen::Update:updatePage();break;
  case Screen::Cameras:title(tr("Kamery","Kameras","Cameras"));makeBody(188);{const char*cameraTitle=tr("Podgląd","Live-Bild","Live view");auto*f=rowFont(cameraTitle,164);int h=wrappedHeight(cameraTitle,164,f);auto*r=box(body,0,0,224,std::max(88,h+font_ui18.line_height+24));lv_obj_set_style_border_color(r,col(LIME),0);icon(r,&img_camera,10,22,LIME);wrapped(r,cameraTitle,48,10,164,f);label(r,data.camera?tr("● Połączona","● Verbunden","● Online"):tr("○ Offline","○ Offline","○ Offline"),48,16+h,164,&font_body18,data.camera?LIME:MUTED);bind(r,0,0,Screen::Live);}navRow(&img_folder,tr("Nagrania i zdjęcia","Aufnahmen & Fotos","Recordings & photos"),Screen::Recordings,83);navRow(&img_settings,tr("Ustawienia kamery","Kamera-Einstellungen","Camera settings"),Screen::CameraSettings,132);navRow(&img_volume,tr("Ustawienia audio","Audio-Einstellungen","Audio settings"),Screen::AudioSettings,181);send(Action::LoadFiles,0,"");footer();break;
@@ -410,15 +435,15 @@ void show(Screen s,int m){if(s==Screen::Live&&page!=Screen::Live)hudVisible=true
  case Screen::Alerts:title(tr("Powiadomienia","Meldungen","Alerts"));makeBody(188);toggle(&img_bell,tr("Alarmy lokalne","Lokale Alarme","Local alerts"),data.settings.notifications,Notifications,0);for(int i=0;i<data.alertCount;i++){auto*r=row(&img_bell,data.alerts[i],"",50+i*55,64);lv_obj_set_style_border_color(r,col(RED),0);}if(!data.alertCount)flowText(tr("Brak zdarzeń","Keine Ereignisse","No events"));{auto*b=button(body,tr("Wyczyść listę","Liste löschen","Clear list"),0,0,224,64);bind(b,2,0,Screen::Home,Action::ClearAlerts);}footer();break;
  case Screen::Battery:title(tr("Bateria","Batterie","Battery"),Screen::General);makeBody();{
   auto*c=box(body,0,0,224,196);detailBattery=batteryIcon(c,70,10,86,44,TEXT);
-  valueLabel=label(c,"—",8,65,208,&lv_font_montserrat_32);lv_obj_set_style_text_align(valueLabel,LV_TEXT_ALIGN_CENTER,0);
-  sensorInfo=label(c,"— V",8,108,208,&font_ui22,MUTED);lv_obj_set_style_text_align(sensorInfo,LV_TEXT_ALIGN_CENTER,0);
-  batteryStatus=wrapped(c,batteryStateText(),10,147,204,&font_body18,LIME);lv_obj_set_style_text_align(batteryStatus,LV_TEXT_ALIGN_CENTER,0);
+  valueLabel=label(c,"—",8,65,208,&lv_font_montserrat_32);lv_obj_set_style_text_align(valueLabel,LV_TEXT_ALIGN_CENTER,0);lv_obj_align(valueLabel,LV_ALIGN_TOP_MID,0,65);
+  sensorInfo=label(c,"— V",8,108,208,&font_ui22,MUTED);lv_obj_set_style_text_align(sensorInfo,LV_TEXT_ALIGN_CENTER,0);lv_obj_align(sensorInfo,LV_ALIGN_TOP_MID,0,108);
+  batteryStatus=wrapped(c,batteryStateText(),10,147,204,&font_body18,LIME);lv_obj_set_style_text_align(batteryStatus,LV_TEXT_ALIGN_CENTER,0);lv_obj_align(batteryStatus,LV_ALIGN_TOP_MID,0,147);
   auto*h=wrapped(body,tr("Poziom i zasilanie szacowane z napięcia.","Stand und Versorgung aus Spannung geschätzt.","Level and power estimated from voltage."),6,200,212,&font_ui14,MUTED);lv_obj_set_style_text_align(h,LV_TEXT_ALIGN_CENTER,0);
  }break;
  case Screen::System:title(tr("System","System","System"),Screen::Settings);makeBody();row(&img_info,tr("Urządzenie","Gerät","Device"),"ESP32-S3 · ES3C28P",0);navRow(&img_info,"Software",Screen::Update,45,FIRMWARE_VERSION);{char b[32];snprintf(b,sizeof b,"%llu MB",(unsigned long long)(data.sdFree/1024/1024));row(&img_folder,tr("Wolne miejsce na SD","Freier SD-Speicher","Free SD storage"),data.sd?b:tr("Brak karty","Keine Karte","No card"),90);}navRow(&img_battery,tr("Bateria","Batterie","Battery"),Screen::Battery,135);{auto*b=button(body,tr("Reset ustawień","Zurücksetzen","Reset settings"),0,231,224,42);lv_obj_set_style_text_color(b,col(RED),0);bind(b,8);}break;
  case Screen::Pair:title(tr("Parowanie kamery","Kamera koppeln","Pair camera"),pairBack);makeBody();flowText(tr("1  Wgraj firmware ESP-CAM.\n2  Ustaw token i hasło.\n3  Direct: sieć kamery.\n    IP: 192.168.4.1\n4  Router: wspólne Wi-Fi\n    i adres IP kamery.\n5  Naciśnij Połącz.","1  Kamera-Firmware laden.\n2  Token/Passwort abgleichen.\n3  Direkt: Kamera-WLAN.\n    IP: 192.168.4.1\n4  Router: gemeinsames WLAN\n    und Kamera-IP.\n5  Verbinden drücken.","1  Flash camera firmware.\n2  Match token and password.\n3  Direct: camera Wi-Fi.\n    IP: 192.168.4.1\n4  Router: same Wi-Fi\n    and camera IP address.\n5  Tap Connect."),&font_ui20,TEXT);break;
  }
- notice=label(root,"",7,294,226,&font_ui12,RED);lv_obj_add_flag(notice,LV_OBJ_FLAG_HIDDEN);lv_obj_update_layout(root);
+ notice=label(root,"",7,lv_disp_get_ver_res(nullptr)-26,lv_disp_get_hor_res(nullptr)-14,&font_ui12,RED);lv_obj_add_flag(notice,LV_OBJ_FLAG_HIDDEN);lv_obj_update_layout(root);updateBatteryIcon(topBattery,page==Screen::Live?0xffffff:TEXT);updateBatteryIcon(detailBattery,TEXT);layoutHeader();
 }
 void begin(Dispatch d){send=d;imageBuf=(lv_color_t*)lv_mem_alloc(Video::bytes);if(imageBuf){memset(imageBuf,0,Video::bytes);liveImage.data=(const uint8_t*)imageBuf;}for(auto&h:data.history)for(float&v:h)v=NAN;show(Screen::Home);}
 Screen current(){return page;}
@@ -444,7 +469,7 @@ void update(const AppState&s){
  if(page==Screen::Live)refreshLive();
 
  updateBatteryIcon(topBattery,page==Screen::Live?0xffffff:TEXT);updateBatteryIcon(detailBattery,TEXT);
- if(clockLabel)lv_label_set_text(clockLabel,data.timeText);if(batteryLabel){char b[12];if(data.batteryPct>=0)snprintf(b,sizeof b,"%d%%",data.batteryPct);else snprintf(b,sizeof b,"—");lv_label_set_text(batteryLabel,b);int width=lv_txt_get_width(b,strlen(b),lv_obj_get_style_text_font(batteryLabel,0),0,LV_TEXT_FLAG_NONE);int visible=lv_obj_get_width(topBattery.shell)+2;if(data.batteryPower!=Battery::Power::Battery&&data.batteryPct>=0)visible=lv_obj_get_width(topBattery.holder);lv_obj_set_x(topBattery.holder,lv_obj_get_x(batteryLabel)+lv_obj_get_width(batteryLabel)-width-visible-4);}if(wifiIcon)lv_obj_set_style_img_recolor(wifiIcon,col(page==Screen::Live?0xffffff:data.wifi?TEXT:MUTED),0);
+ layoutHeader();
  if(page==Screen::Sensors||page==Screen::Home)for(int i=0;i<data.sensorCount;i++)refreshDevice(i);
 
  if(page==Screen::Metric){char n[40];float v=readingValue();if(readingValid()&&isfinite(v))snprintf(n,sizeof n,metric==0||metric==4?"%.1f %s":"%.0f %s",v,unit(metric));else snprintf(n,sizeof n,"— %s",unit(metric));lv_label_set_text(valueLabel,n);lv_label_set_text(onlineLabel,readingValid()?tr("● Połączony","● Verbunden","● Connected"):tr("○ Brak danych","○ Keine Werte","○ No data"));

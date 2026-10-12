@@ -5,6 +5,11 @@ Wi-Fi z wyszukiwaniem sieci i klawiaturą hasła, języki polski/niemiecki/angie
 sensory BME688/BSEC2 i SCD41 przez I²C/pogo, ESP-CAM przez router lub Direct,
 karta SD przeznaczona na nagrania i logi. Nie zmieniono schematu ustawień V1.2.
 
+V1.3.11 poprawia kamerę: pełny ekran przełącza obraz i dotyk do **poziomu 320×240**,
+a wyjście przywraca pion. Komunikat „Brak obrazu” i przyciski mają osobne obszary.
+Wskaźniki Wi-Fi, baterii i procentów są wyrównane; segmenty oraz piorun mieszczą się
+w ikonie. [Instrukcja i rzeczywisty podgląd](docs/CAMERA_ORIENTATION_V1_3_11.md).
+
 V1.3.10 dodaje **sensory Bluetooth BTHome / BLE ESS**: najpierw dodaj urządzenie,
 potem wybierz wyświetlany pomiar. Drugi ekran główny otwiera się przesunięciem palca.
 Nowe większe ikony, bez daty, bateria bliżej procentów. Połączenie zaczyna się od
@@ -66,5 +71,5 @@ Istniejące wydania nie są nadpisywane. Każdy commit nie oznacza nowego wydani
 Pełna dokumentacja sprzętu i funkcji: [README_PL.md](README_PL.md).
 OTA: [docs/OTA.md](docs/OTA.md). Diagnostyka LCD: [docs/LCD_FIX_V1_2.md](docs/LCD_FIX_V1_2.md).
 
-V1.3.10 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
+V1.3.11 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
 działania LCD, sensorów, radia ani aktualizacji przy zaniku zasilania.

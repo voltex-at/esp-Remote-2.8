@@ -11,11 +11,12 @@
 #include <initializer_list>
 #include <string>
 extern "C" int __lsan_is_turned_off(){return 1;} // restricted executor has no /proc thread access
-static void flush(lv_disp_drv_t*d,const lv_area_t*,lv_color_t*){lv_disp_flush_ready(d);}
+static lv_color_t nativePixels[240*320];static uint32_t flushCount=0;
+static void flush(lv_disp_drv_t*d,const lv_area_t*a,lv_color_t*p){assert(a->x1>=0&&a->x2<240&&a->y1>=0&&a->y2<320);int width=lv_area_get_width(a);for(int y=a->y1;y<=a->y2;y++)for(int x=a->x1;x<=a->x2;x++)nativePixels[y*240+x]=p[(y-a->y1)*width+x-a->x1];flushCount++;lv_disp_flush_ready(d);}
 static Command sent[32];static int sentCount=0;static bool capture=false;
 static lv_point_t pointerPos={0,0};static bool pointerDown=false;
 static void pointerRead(lv_indev_drv_t*,lv_indev_data_t*d){d->point=pointerPos;d->state=pointerDown?LV_INDEV_STATE_PRESSED:LV_INDEV_STATE_RELEASED;}
-static void pointerStep(int x,int y,bool down){pointerPos={lv_coord_t(x),lv_coord_t(y)};pointerDown=down;lv_tick_inc(40);lv_timer_handler();}
+static void pointerStep(int x,int y,bool down){if(lv_disp_get_rotation(nullptr)==LV_DISP_ROT_90)pointerPos={lv_coord_t(y),lv_coord_t(319-x)};else pointerPos={lv_coord_t(x),lv_coord_t(y)};pointerDown=down;lv_tick_inc(40);lv_timer_handler();}
 static void tap(int x,int y){pointerStep(x,y,true);pointerStep(x,y,true);pointerStep(x,y,false);pointerStep(x,y,false);}
 static lv_obj_t*scrollBody(){for(uint32_t i=0;i<lv_obj_get_child_cnt(lv_scr_act());i++){auto*c=lv_obj_get_child(lv_scr_act(),i);if(lv_obj_check_type(c,&lv_obj_class)&&lv_obj_has_flag(c,LV_OBJ_FLAG_SCROLLABLE)&&lv_obj_get_scroll_dir(c)==LV_DIR_VER)return c;}return nullptr;}
 static void checkTargets(lv_obj_t*p){
@@ -30,10 +31,26 @@ static lv_obj_t*findType(lv_obj_t*parent,const lv_obj_class_t*type){if(lv_obj_ch
 static void dumpLabels(lv_obj_t*p){if(lv_obj_check_type(p,&lv_label_class))fprintf(stderr,"Label: %s\n",lv_label_get_text(p));for(uint32_t i=0;i<lv_obj_get_child_cnt(p);i++)dumpLabels(lv_obj_get_child(p,i));}
 static void click(const char*text){lv_obj_update_layout(lv_scr_act());auto*l=findLabel(lv_scr_act(),text);if(!l)fprintf(stderr,"Missing UI target: %s\n",text);assert(l);lv_event_send(lv_obj_get_parent(l),LV_EVENT_CLICKED,nullptr);}
 static lv_obj_t*findImage(lv_obj_t*p,const lv_img_dsc_t*src){if(lv_obj_check_type(p,&lv_img_class)&&lv_img_get_src(p)==src)return p;for(uint32_t i=0;i<lv_obj_get_child_cnt(p);i++)if(auto*o=findImage(lv_obj_get_child(p,i),src))return o;return nullptr;}
+static void checkHeader(const AppState&s){lv_obj_update_layout(lv_scr_act());char text[12];if(s.batteryPct>=0)snprintf(text,sizeof text,"%d%%",s.batteryPct);else strcpy(text,"—");
+ auto*pct=findLabel(lv_scr_act(),text);auto*clock=findLabel(lv_scr_act(),s.timeText);auto*wifi=findImage(lv_scr_act(),&img_wifi);auto*bolt=findImage(lv_scr_act(),&img_bolt);assert(pct&&clock&&wifi&&bolt);auto*holder=lv_obj_get_parent(bolt);auto*shell=lv_obj_get_child(holder,0);auto*cap=lv_obj_get_child(holder,1);lv_area_t p,t,w,b,c;lv_obj_get_coords(pct,&p);lv_obj_get_coords(clock,&t);lv_obj_get_coords(wifi,&w);lv_obj_get_coords(holder,&b);lv_obj_get_coords(cap,&c);
+ int textWidth=lv_txt_get_width(text,strlen(text),lv_obj_get_style_text_font(pct,0),0,LV_TEXT_FLAG_NONE),wifiWidth=28*lv_img_get_zoom(wifi)/256;int textLeft=p.x2+1-textWidth,visibleRight=lv_obj_has_flag(bolt,LV_OBJ_FLAG_HIDDEN)?c.x2+1:b.x2+1;
+ assert(textWidth<=lv_obj_get_width(pct)&&p.x2==lv_disp_get_hor_res(nullptr)-9&&textLeft-visibleRight==4&&b.x1-(w.x1+wifiWidth)==8);
+ assert(lv_txt_get_width(s.timeText,strlen(s.timeText),lv_obj_get_style_text_font(clock,0),0,LV_TEXT_FLAG_NONE)<=lv_obj_get_width(clock)&&t.x2<w.x1);
+ assert(b.y1>=0&&b.y2<(Ui::current()==Screen::Home?36:24));
+ lv_area_t shellArea;lv_obj_get_coords(shell,&shellArea);int center=(shellArea.y1+shellArea.y2)/2;
+ for(int i=0;i<4;i++){lv_area_t cell;lv_obj_get_coords(lv_obj_get_child(shell,i),&cell);assert(cell.x1>shellArea.x1&&cell.x2<shellArea.x2&&cell.y1>shellArea.y1&&cell.y2<shellArea.y2&&abs((cell.y1+cell.y2)/2-center)<=1);}
+ // Inspect the real rendered glyph pixels, independently of the positioning
+ // function: percentage and clock must be level with the outline's center.
+ auto*snapshot=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);assert(snapshot);auto*pixels=(lv_color_t*)snapshot->data;
+ for(auto*label:{pct,clock}){lv_area_t area;lv_obj_get_coords(label,&area);auto ink=lv_color_to32(lv_obj_get_style_text_color(label,0));int top=1000,bottom=-1;
+  for(int y=std::max(0,int(area.y1));y<=area.y2&&y<int(snapshot->header.h);y++)for(int x=area.x1;x<=area.x2;x++){lv_color32_t pixel;pixel.full=lv_color_to32(pixels[y*snapshot->header.w+x]);lv_color32_t target;target.full=ink;int delta=abs(int(pixel.ch.red)-target.ch.red)+abs(int(pixel.ch.green)-target.ch.green)+abs(int(pixel.ch.blue)-target.ch.blue);if(delta<50){top=std::min(top,y);bottom=std::max(bottom,y);}}
+  if(bottom<0||abs((top+bottom)/2-center)>1)fprintf(stderr,"Header misalignment: %s visible y=%d..%d battery center=%d\n",lv_label_get_text(label),top,bottom,center);assert(bottom>=0&&abs((top+bottom)/2-center)<=1);
+ }lv_snapshot_free(snapshot);
+}
 static void clickImage(const lv_img_dsc_t*src){auto*i=findImage(lv_scr_act(),src);assert(i);lv_event_send(lv_obj_get_parent(i),LV_EVENT_CLICKED,nullptr);}
 static void pressKey(lv_obj_t*kb,const char*key){for(uint16_t i=0;i<100;i++){const char*t=lv_btnmatrix_get_btn_text(kb,i);if(!t)break;if(!strcmp(t,key)){lv_btnmatrix_set_selected_btn(kb,i);lv_event_send(kb,LV_EVENT_VALUE_CHANGED,nullptr);return;}}assert(false);}
-static void save(const char*name){lv_obj_update_layout(lv_scr_act());lv_refr_now(nullptr);auto*s=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);if(!s){fprintf(stderr,"snapshot failed %s\n",name);exit(1);}FILE*f=fopen(name,"wb");fprintf(f,"P6\n240 320\n255\n");auto*p=(lv_color_t*)s->data;for(int i=0;i<240*320;i++){lv_color32_t c; c.full=lv_color_to32(p[i]);fputc(c.ch.red,f);fputc(c.ch.green,f);fputc(c.ch.blue,f);}fclose(f);lv_snapshot_free(s);}
-int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t buf[240*20];static lv_disp_draw_buf_t b;lv_disp_draw_buf_init(&b,buf,nullptr,240*20);static lv_disp_drv_t d;lv_disp_drv_init(&d);d.hor_res=240;d.ver_res=320;d.flush_cb=flush;d.draw_buf=&b;lv_disp_drv_register(&d);Ui::begin(command);
+static void save(const char*name){lv_obj_update_layout(lv_scr_act());lv_refr_now(nullptr);auto*s=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);if(!s){fprintf(stderr,"snapshot failed %s\n",name);exit(1);}FILE*f=fopen(name,"wb");fprintf(f,"P6\n%d %d\n255\n",s->header.w,s->header.h);auto*p=(lv_color_t*)s->data;for(unsigned i=0;i<s->header.w*s->header.h;i++){lv_color32_t c; c.full=lv_color_to32(p[i]);fputc(c.ch.red,f);fputc(c.ch.green,f);fputc(c.ch.blue,f);}fclose(f);lv_snapshot_free(s);}
+int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t buf[240*24];static lv_disp_draw_buf_t b;lv_disp_draw_buf_init(&b,buf,nullptr,240*24);static lv_disp_drv_t d;lv_disp_drv_init(&d);d.hor_res=240;d.ver_res=320;d.sw_rotate=1;d.flush_cb=flush;d.draw_buf=&b;lv_disp_drv_register(&d);Ui::begin(command);
  AppState s;assert(!s.settings.ssid[0]&&!s.settings.password[0]&&!s.settings.pairToken[0]);Ui::show(Screen::WifiSettings);Ui::update(s);lv_obj_update_layout(lv_scr_act());assert(findLabel(lv_scr_act(),"Nie ustawiono"));
  s.batteryPct=80;s.batteryV=3.98;s.wifi=true;s.rssi=-54;s.wifiLink=WifiLinkState::Connected;strcpy(s.connectedSsid,"ESP32-BABY-CAM");strcpy(s.settings.ssid,s.connectedSsid);s.wifiScan=WifiScanState::Done;s.wifiScanGeneration=1;s.networkCount=5;
  const char*ssids[]={"ESP32-BABY-CAM","Home-24G","Guest","Office-Enterprise","A-very-long-SSID-with-32-letters"};for(int i=0;i<5;i++){snprintf(s.networks[i].ssid,33,"%s",ssids[i]);s.networks[i].rssi=-42-i*10;s.networks[i].security=i==2?WifiSecurity::Open:i==3?WifiSecurity::Unsupported:WifiSecurity::Wpa2;}
@@ -55,7 +72,7 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  for(int lang=0;lang<3;lang++){s.settings.language=lang;Ui::update(s);
   for(unsigned i=0;i<sizeof screens/sizeof screens[0];i++){
    Ui::show(screens[i]);Ui::update(s);lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());
-   assert(lv_color_to32(lv_obj_get_style_bg_color(lv_scr_act(),0))==lv_color_to32(lv_color_hex(UiColors::get(s.theme,screens[i]==Screen::Home).background)));
+   assert(lv_color_to32(lv_obj_get_style_bg_color(lv_scr_act(),0))==lv_color_to32(lv_color_hex(screens[i]==Screen::Live?0x000000:UiColors::get(s.theme,screens[i]==Screen::Home).background)));
    if(auto*panel=scrollBody()){
     for(uint32_t a=0;a<lv_obj_get_child_cnt(panel);a++)for(uint32_t b=a+1;b<lv_obj_get_child_cnt(panel);b++){lv_area_t x,y;lv_obj_get_coords(lv_obj_get_child(panel,a),&x);lv_obj_get_coords(lv_obj_get_child(panel,b),&y);assert(!(x.x1<=y.x2&&y.x1<=x.x2&&x.y1<=y.y2&&y.y1<=x.y2));}
     if(lv_obj_get_scroll_bottom(panel)>0){lv_obj_scroll_to_y(panel,lv_obj_get_scroll_y(panel)+lv_obj_get_scroll_bottom(panel),LV_ANIM_OFF);lv_obj_update_layout(lv_scr_act());lv_area_t a,b;lv_obj_get_coords(lv_obj_get_child(panel,-1),&a);lv_obj_get_coords(panel,&b);assert(a.y2<=b.y2&&a.y2>=b.y1);lv_obj_scroll_to_y(panel,0,LV_ANIM_OFF);}
@@ -195,7 +212,7 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
   s.batteryV=4.02f;s.batteryPct=Battery::percentage(s.batteryV);s.batteryPower=Battery::Power::Charging;Ui::update(s);assert(!lv_obj_has_flag(findImage(lv_scr_act(),&img_bolt),LV_OBJ_FLAG_HIDDEN));
   auto*a=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);assert(a);lv_tick_inc(450);Ui::update(s);auto*b=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);assert(b&&a->header.w==240&&b->header.w==240&&memcmp(a->data,b->data,240*320*sizeof(lv_color_t)));lv_snapshot_free(a);lv_snapshot_free(b);
   char n[512];snprintf(n,sizeof n,"%s/battery_charging_%d_%d.ppm",argv[1],theme,lang);save(n);
-  s.batteryPower=Battery::Power::External;s.batteryV=4.12f;s.batteryPct=Battery::percentage(s.batteryV);Ui::update(s);a=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);lv_tick_inc(450);Ui::update(s);b=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);assert(a&&b&&a->header.w==240&&b->header.w==240&&!memcmp(a->data,b->data,240*320*sizeof(lv_color_t)));lv_snapshot_free(a);lv_snapshot_free(b);
+  s.batteryPower=Battery::Power::External;s.batteryV=4.12f;s.batteryPct=Battery::percentage(s.batteryV);Ui::update(s);a=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);lv_tick_inc(450);Ui::update(s);b=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);if(a&&b&&memcmp(a->data,b->data,240*320*sizeof(lv_color_t))){int left=240,right=0,top=320,bottom=0,count=0;for(int i=0;i<240*320;i++)if(((lv_color_t*)a->data)[i].full!=((lv_color_t*)b->data)[i].full){left=std::min(left,i%240);right=std::max(right,i%240);top=std::min(top,i/240);bottom=std::max(bottom,i/240);count++;}fprintf(stderr,"Powered battery moved: theme=%d lang=%d pixels=%d area=%d,%d..%d,%d\n",theme,lang,count,left,top,right,bottom);}assert(a&&b&&a->header.w==240&&b->header.w==240&&!memcmp(a->data,b->data,240*320*sizeof(lv_color_t)));lv_snapshot_free(a);lv_snapshot_free(b);
   snprintf(n,sizeof n,"%s/battery_external_%d_%d.ppm",argv[1],theme,lang);save(n);lv_obj_update_layout(lv_scr_act());if(scrollBody()&&lv_obj_get_scroll_bottom(scrollBody())>0)fprintf(stderr,"Battery overflow theme=%d lang=%d scroll=%d\n",theme,lang,int(lv_obj_get_scroll_bottom(scrollBody())));assert(scrollBody()&&lv_obj_get_scroll_bottom(scrollBody())<=0);
   s.batteryPct=-1;s.batteryV=NAN;s.batteryPower=Battery::Power::Battery;Ui::update(s);assert(countLabel(lv_scr_act(),"—")==2&&findLabel(lv_scr_act(),"— V"));
   s.batteryPct=80;s.batteryV=3.98f;Ui::update(s);Ui::show(Screen::Home);Ui::update(s);assert(!findLabel(lv_scr_act(),"12.10.2026")&&!findLabel(lv_scr_act(),"Gotowy"));
@@ -206,28 +223,44 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  }
  s.theme=ThemeMode::Dark;s.settings.language=0;s.batteryPct=80;s.batteryV=3.98f;s.batteryPower=Battery::Power::Battery;Ui::update(s);
  puts("Battery UI: synchronized percentages, 100% width, animated charging, static powered bolt, invalid values and one-page diagnostics PL/DE/EN. Saved sensor readings update live and expire individually.");
- // Dashboard, independent audio settings and the real full-screen viewer.
+ // Percentages from unknown through 100%, with and without the bolt, must
+ // fit immediately in every header; no delayed Wi-Fi shift on the next tick.
+ capture=false;s.settings.language=0;strcpy(s.timeText,"23:59");
+ for(int theme=0;theme<2;theme++)for(auto screen:{Screen::Home,Screen::Settings,Screen::Battery,Screen::Live})for(auto power:{Battery::Power::Battery,Battery::Power::External})for(int pct:{0,9,49,100,-1}){
+  s.theme=ThemeSettings::normalize(theme);s.batteryPower=power;s.batteryPct=pct;Ui::update(s);Ui::show(screen);Ui::update(s);checkHeader(s);
+ }
+ s.theme=ThemeMode::Dark;s.batteryPower=Battery::Power::Battery;s.batteryPct=80;strcpy(s.timeText,"14:26");Ui::update(s);
+ puts("Battery header: immediate 4px percentage gap, 8px Wi-Fi gap, no overlap/clipping through 100%, centered segments and actual glyph alignment in both themes OK.");
+ // Camera orientation uses the real LVGL software rotation and raw portrait
+ // touch coordinates. The SPI spy framebuffer must match every video pixel.
  capture=true;s.settings.language=0;s.theme=ThemeMode::Dark;s.camera=s.audioCap=s.motionCap=s.sd=true;s.playing=s.recording=s.listening=false;Ui::update(s);
  Ui::show(Screen::Sensors);sentCount=0;tap(60,175);Ui::update(s);assert(Ui::current()==Screen::Metric&&findLabel(lv_scr_act(),"Temperatura"));
  Ui::show(Screen::CameraSettings);assert(!findLabel(lv_scr_act(),"Alarm dźwięku")&&!findLabel(lv_scr_act(),"Głośność"));Ui::show(Screen::AudioSettings);assert(findLabel(lv_scr_act(),"Alarm dźwięku")&&findLabel(lv_scr_act(),"Głośność"));
  static uint16_t fixture[Video::pixels];for(int y=0;y<Video::height;y++)for(int x=0;x<Video::width;x++){uint32_t c=x<48?0xb9364b:x>=272?0x386daa:((x/32+y/24)%2?0x8ba79a:0xd1dfce);fixture[y*Video::width+x]=lv_color_hex(c).full;}
- for(int theme=0;theme<2;theme++){s.theme=ThemeSettings::normalize(theme);Ui::update(s);Ui::show(Screen::Live);Ui::frame(fixture);Ui::update(s);lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());assert(!findLabel(lv_scr_act(),"Kamera 1"));
-
-  char name[512];snprintf(name,sizeof name,"%s/camera_cover_%d.ppm",argv[1],theme);save(name);
-  sentCount=0;tap(90,51);assert(sentCount==0);snprintf(name,sizeof name,"%s/camera_whole_%d.ppm",argv[1],theme);save(name);
-  tap(210,98);auto*sl=findType(lv_scr_act(),&lv_slider_class);assert(sl);checkTargets(lv_scr_act());lv_slider_set_value(sl,72,LV_ANIM_OFF);lv_event_send(sl,LV_EVENT_VALUE_CHANGED,nullptr);assert(findLabel(lv_scr_act(),"72%"));sentCount=0;lv_event_send(sl,LV_EVENT_RELEASED,nullptr);assert(sentCount==1&&sent[0].action==Action::Setting&&sent[0].value==Volume&&!strcmp(sent[0].text,"72"));
-  snprintf(name,sizeof name,"%s/camera_volume_%d.ppm",argv[1],theme);save(name);clickImage(&img_close);
-  sentCount=0;tap(150,222);assert(sentCount==1&&sent[0].action==Action::Record&&sent[0].value==1);s.recording=true;s.clipMs=12000;Ui::update(s);assert(findImage(lv_scr_act(),&img_stop)&&findLabel(lv_scr_act(),"00:12"));sentCount=0;tap(150,222);assert(sentCount==1&&sent[0].action==Action::Record&&sent[0].value==0);s.recording=false;Ui::update(s);
-  sentCount=0;tap(90,222);assert(sentCount==1&&sent[0].action==Action::Snapshot);sentCount=0;tap(210,222);assert(sentCount==1&&sent[0].action==Action::Listen&&sent[0].value==1);
-  sentCount=0;pointerStep(30,222,true);pointerStep(30,222,true);pointerStep(30,222,false);pointerStep(30,222,false);assert(sentCount==2&&sent[0].action==Action::Talk&&sent[0].value==1&&sent[1].value==0);
-  tap(120,165);assert(lv_obj_has_flag(lv_obj_get_parent(lv_obj_get_parent(findImage(lv_scr_act(),&img_back))),LV_OBJ_FLAG_HIDDEN));tap(120,165);assert(!lv_obj_has_flag(lv_obj_get_parent(lv_obj_get_parent(findImage(lv_scr_act(),&img_back))),LV_OBJ_FLAG_HIDDEN)); // hide and reveal the HUD without dispatching media actions.
-  tap(210,148);Ui::update(s);assert(Ui::current()==Screen::CameraSettings);lv_obj_update_layout(lv_scr_act());tap(30,46);Ui::update(s);assert(Ui::current()==Screen::Live);lv_obj_update_layout(lv_scr_act());
-  tap(90,98); // Restore cover mode before next language/theme.
-  tap(30,51);Ui::update(s);assert(Ui::current()==Screen::Cameras);
+ for(int theme=0;theme<2;theme++)for(int lang=0;lang<3;lang++){
+  s.settings.language=lang;s.theme=ThemeSettings::normalize(theme);Ui::update(s);Ui::show(Screen::Live);Ui::frame(fixture);Ui::update(s);lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());assert(lv_disp_get_rotation(nullptr)==LV_DISP_ROT_NONE&&lv_obj_get_width(lv_scr_act())==240);
+  char name[512];snprintf(name,sizeof name,"%s/camera_portrait_%d_%d.ppm",argv[1],theme,lang);save(name);
+  sentCount=0;tap(90,54);Ui::update(s);lv_obj_update_layout(lv_scr_act());assert(sentCount==0&&lv_disp_get_rotation(nullptr)==LV_DISP_ROT_90&&lv_obj_get_width(lv_scr_act())==320&&lv_obj_get_height(lv_scr_act())==240);
+  assert(lv_obj_has_flag(lv_obj_get_parent(lv_obj_get_parent(findImage(lv_scr_act(),&img_back))),LV_OBJ_FLAG_HIDDEN));lv_refr_now(nullptr);
+  for(int y=0;y<240;y++)for(int x=0;x<320;x++)assert(nativePixels[(319-x)*240+y].full==fixture[y*320+x]);
+  snprintf(name,sizeof name,"%s/camera_landscape_%d_%d.ppm",argv[1],theme,lang);save(name);
+  tap(160,125);checkHeader(s);assert(!lv_obj_has_flag(lv_obj_get_parent(lv_obj_get_parent(findImage(lv_scr_act(),&img_back))),LV_OBJ_FLAG_HIDDEN));checkTargets(lv_scr_act());snprintf(name,sizeof name,"%s/camera_landscape_controls_%d_%d.ppm",argv[1],theme,lang);save(name);
+  tap(290,54);auto*sl=findType(lv_scr_act(),&lv_slider_class);assert(sl);checkTargets(lv_scr_act());lv_slider_set_value(sl,72,LV_ANIM_OFF);lv_event_send(sl,LV_EVENT_VALUE_CHANGED,nullptr);assert(findLabel(lv_scr_act(),"72%"));sentCount=0;lv_event_send(sl,LV_EVENT_RELEASED,nullptr);assert(sentCount==1&&sent[0].action==Action::Setting&&sent[0].value==Volume&&!strcmp(sent[0].text,"72"));
+  snprintf(name,sizeof name,"%s/camera_landscape_volume_%d_%d.ppm",argv[1],theme,lang);save(name);clickImage(&img_close);
+  sentCount=0;tap(200,210);assert(sentCount==1&&sent[0].action==Action::Record&&sent[0].value==1);s.recording=true;s.clipMs=12000;Ui::update(s);assert(findImage(lv_scr_act(),&img_stop)&&findLabel(lv_scr_act(),"00:12"));sentCount=0;tap(200,210);assert(sentCount==1&&sent[0].action==Action::Record&&sent[0].value==0);s.recording=false;Ui::update(s);
+  sentCount=0;tap(120,210);assert(sentCount==1&&sent[0].action==Action::Snapshot);sentCount=0;tap(280,210);assert(sentCount==1&&sent[0].action==Action::Listen&&sent[0].value==1);
+  sentCount=0;pointerStep(40,210,true);pointerStep(40,210,true);pointerStep(40,210,false);pointerStep(40,210,false);assert(sentCount==2&&sent[0].action==Action::Talk&&sent[0].value==1&&sent[1].value==0);
+  // Rebuild/theme changes retain the landscape state and an open volume draft.
+  tap(290,54);sl=findType(lv_scr_act(),&lv_slider_class);lv_slider_set_value(sl,81,LV_ANIM_OFF);s.theme=theme?ThemeMode::Dark:ThemeMode::Light;Ui::update(s);sl=findType(lv_scr_act(),&lv_slider_class);assert(sl&&lv_slider_get_value(sl)==81&&lv_disp_get_rotation(nullptr)==LV_DISP_ROT_90);clickImage(&img_close);s.theme=ThemeSettings::normalize(theme);Ui::update(s);
+  tap(234,54);Ui::update(s);assert(Ui::current()==Screen::CameraSettings&&lv_disp_get_rotation(nullptr)==LV_DISP_ROT_NONE);tap(30,46);Ui::update(s);assert(Ui::current()==Screen::Live&&lv_disp_get_rotation(nullptr)==LV_DISP_ROT_90);
+  tap(90,54);Ui::update(s);assert(lv_disp_get_rotation(nullptr)==LV_DISP_ROT_NONE&&lv_obj_get_width(lv_scr_act())==240);sentCount=0;tap(150,290);assert(sentCount==1&&sent[0].action==Action::Record);tap(30,54);Ui::update(s);assert(Ui::current()==Screen::Cameras&&lv_disp_get_rotation(nullptr)==LV_DISP_ROT_NONE);
  }
- s.theme=ThemeMode::Light;s.camera=s.audioCap=false;Ui::update(s);Ui::show(Screen::Live);assert(findLabel(lv_scr_act(),"Brak obrazu"));sentCount=0;tap(150,290);assert(sentCount==0);
- s.playing=true;Ui::update(s);Ui::frame(fixture);sentCount=0;tap(30,51);Ui::update(s);assert(sentCount==2&&sent[0].action==Action::Play&&sent[0].value==0&&sent[1].action==Action::LoadFiles&&Ui::current()==Screen::Cameras);s.playing=false;s.theme=ThemeMode::Dark;Ui::update(s);capture=false;
- puts("Viewer: full-screen/whole-frame, overlay volume save, snapshot, record start/stop, listen, hold-to-talk, offline guards and playback close OK.");
+ for(int lang=0;lang<3;lang++){s.settings.language=lang;s.theme=ThemeMode::Light;s.camera=s.audioCap=false;Ui::update(s);Ui::show(Screen::Live);Ui::update(s);assert(findLabel(lv_scr_act(),lang==0?"Brak obrazu":lang==1?"Kein Bild":"No video"));sentCount=0;tap(150,290);assert(sentCount==0);
+  char n[512];snprintf(n,sizeof n,"%s/camera_offline_portrait_%d.ppm",argv[1],lang);save(n);tap(90,54);Ui::update(s);assert(lv_disp_get_rotation(nullptr)==LV_DISP_ROT_90);snprintf(n,sizeof n,"%s/camera_offline_landscape_%d.ppm",argv[1],lang);save(n);sentCount=0;tap(200,210);assert(sentCount==0);
+  click(lang==0?"Połączenie":lang==1?"Verbindung":"Connection");Ui::update(s);assert(Ui::current()==Screen::Network&&lv_disp_get_rotation(nullptr)==LV_DISP_ROT_NONE);tap(23,46);Ui::update(s);assert(Ui::current()==Screen::Live&&lv_disp_get_rotation(nullptr)==LV_DISP_ROT_90);tap(30,54);Ui::update(s);
+ }
+ s.settings.language=0;s.playing=true;Ui::update(s);Ui::show(Screen::Live);Ui::frame(fixture);sentCount=0;tap(30,54);Ui::update(s);assert(sentCount==2&&sent[0].action==Action::Play&&sent[0].value==0&&sent[1].action==Action::LoadFiles&&Ui::current()==Screen::Cameras);s.playing=false;s.theme=ThemeMode::Dark;Ui::update(s);capture=false;
+ puts("Camera PL/DE/EN light/dark: real rotation/flush pixel mapping, native touch coordinates, portrait restoration, independent toolbars, volume draft, snapshot/record/audio and offline connection action OK.");
  // Stress rebuilds and missing values, including high CO2 (32-bit chart coordinates).
  for(int i=0;i<150;i++){s.camera=i%2;s.alertCount=i%3;s.co2=5000;s.history[2][59]=5000;Ui::update(s);Ui::show(Screen::Metric,2);Ui::update(s);lv_tick_inc(20);lv_timer_handler();}
  s.bmeFresh=s.scdFresh=false;s.temperature=s.humidity=s.co2=NAN;Ui::show(Screen::Metric);Ui::update(s);char name[512];snprintf(name,sizeof name,"%s/ui_offline.ppm",argv[1]);save(name);

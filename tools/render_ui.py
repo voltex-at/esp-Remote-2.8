@@ -20,18 +20,18 @@ for lang,key in enumerate(('pl','de','en')):
     actual=Image.open(out/f'ui_{lang}_00.png').convert('RGB')
     if ImageChops.difference(reference,actual).getbbox() is not None:
         raise AssertionError(f'Home screen changed in {key}; must remain pixel-identical')
-print('Home screen PL/DE/EN: pixel-identical to V1.3.10 home reference.')
+print('Home screen PL/DE/EN: pixel-identical to V1.3.11 home reference.')
 print(out)
 
-# A shareable proof from actual firmware objects, with explicit demo-data label.
-preview=Image.new('RGB',(1008,752),'#16212e');draw=ImageDraw.Draw(preview)
+# A shareable proof from actual firmware objects; keep native aspect ratios.
+preview=Image.new('RGB',(1008,694),'#16212e');draw=ImageDraw.Draw(preview)
 font=ImageFont.truetype(str(root/'assets/MontserratMedium.ttf'),18)
-tiles=(('ui_0_00.png','Menu · nowe ikony'),('home_second.png','Drugi ekran · swipe'),
-       ('ui_0_01.png','Sensory · dodaj najpierw'),('sensor_choose.png','Wybór pomiaru'),
-       ('light_ui_0_00.png','Menu · jasny motyw'),('light_home_second.png','Pomiary · jasny motyw'),
-       ('ui_0_26.png','Sensory Bluetooth'),('ui_0_07.png','WLAN / Bluetooth / ESP'))
+tiles=(('camera_portrait_0_0.png','Kamera · pion'),('camera_offline_portrait_0.png','Brak obrazu · pion'),
+       ('ui_0_00.png','Wyrównane wskaźniki'),('camera_landscape_controls_0_0.png','Kamera · poziom'),
+       ('camera_offline_landscape_0.png','Brak obrazu · poziom'),('camera_landscape_volume_0_0.png','Głośność · poziom'))
 for i,(name,caption) in enumerate(tiles):
-    x=12+(i%4)*252;y=12+(i//4)*352
-    draw.text((x,y),caption,font=font,fill='#f7f9fc');preview.paste(Image.open(out/name),(x,y+26))
-draw.text((12,721),'LVGL 240 × 320 · V1.3.10 · przykładowe dane',font=font,fill='#b2becb')
-preview.save(root/'docs/SENSORS_BLE_V1_3_10.png')
+    x=12+(i%3)*332;y=12+(i//3)*352
+    draw.text((x,y),caption,font=font,fill='#f7f9fc')
+    screen=Image.open(out/name);preview.paste(screen,(x+(320-screen.width)//2,y+26))
+draw.text((12,659),'LVGL · V1.3.11 · przykładowe dane i obraz testowy',font=font,fill='#b2becb')
+preview.save(root/'docs/CAMERA_ORIENTATION_V1_3_11.png')
