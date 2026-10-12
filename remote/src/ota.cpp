@@ -1,5 +1,6 @@
 #include "ota.h"
 #include "board_config.h"
+#include "tls_memory.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -42,13 +43,14 @@ struct Http {
    esp_http_client_config_t c={};c.url=next.c_str();c.crt_bundle_attach=esp_crt_bundle_attach;c.disable_auto_redirect=true;c.timeout_ms=20000;c.buffer_size=4096;c.buffer_size_tx=4096;c.event_handler=event;c.user_data=this;
    handle=esp_http_client_init(&c);if(!handle){error=Error::Memory;return false;}
    esp_http_client_set_header(handle,"User-Agent","ESPRemote/1.3");esp_http_client_set_header(handle,"Accept-Encoding","identity");
-   auto result=esp_http_client_open(handle,0);if(result!=ESP_OK){
+   TlsMemory::report("before HTTPS");auto result=esp_http_client_open(handle,0);if(result!=ESP_OK){
     Serial.printf("[OTA] open=%s tls=%s mbedtls=%d flags=0x%x\n",esp_err_to_name(result),esp_err_to_name(tlsError),tlsCode,tlsFlags);
     detail=tlsCode?tlsCode:(tlsError?tlsError:result);
-    error=tlsError==ESP_ERR_ESP_TLS_CANNOT_RESOLVE_HOSTNAME?Error::Dns:(tlsFlags||tlsCode||tlsError>=ESP_ERR_MBEDTLS_CERT_PARTLY_OK)?Error::Tls:Error::Connection;
+    error=tlsAllocationError(tlsCode)?Error::Memory:tlsError==ESP_ERR_ESP_TLS_CANNOT_RESOLVE_HOSTNAME?Error::Dns:(tlsFlags||tlsCode||tlsError>=ESP_ERR_MBEDTLS_CERT_PARTLY_OK)?Error::Tls:Error::Connection;
+    TlsMemory::report("HTTPS failed");
     return false;
    }
-   if(esp_http_client_fetch_headers(handle)<0){error=Error::Connection;Serial.println("[OTA] response headers interrupted/timeout");return false;}int code=esp_http_client_get_status_code(handle);
+   TlsMemory::report("HTTPS connected");if(esp_http_client_fetch_headers(handle)<0){error=Error::Connection;Serial.println("[OTA] response headers interrupted/timeout");return false;}int code=esp_http_client_get_status_code(handle);
    Serial.printf("[OTA] HTTP=%d\n",code);
    if(code>=300&&code<400){if(!redirect[0]||truncated){error=Error::Redirect;return false;}next=redirect;continue;}
    if(code!=200){detail=code;error=code==404?Error::NotFound:(code==403||code==429)?Error::RateLimit:Error::Http;return false;}return true;

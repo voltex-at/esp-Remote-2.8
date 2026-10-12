@@ -15,6 +15,9 @@ inline bool newer(const char*a,const char*b){uint32_t x[3],y[3];if(!versionParts
 inline bool validHash(const char*s){if(!s||strlen(s)!=64)return false;for(int i=0;i<64;i++)if(!((s[i]>='0'&&s[i]<='9')||(s[i]>='a'&&s[i]<='f')))return false;return true;}
 inline bool allowedUrl(const char*s){if(!s)return false;return !strncmp(s,RELEASE_PREFIX,sizeof(RELEASE_PREFIX)-1)||!strncmp(s,ASSET_PREFIX,sizeof(ASSET_PREFIX)-1);}
 inline bool appHeader(const uint8_t*p,size_t n){return n>=36&&p[0]==0xe9&&p[12]==9&&p[13]==0&&p[32]==0x32&&p[33]==0x54&&p[34]==0xcd&&p[35]==0xab;}
+// ESP-TLS records -ret from mbedTLS, so device logs commonly contain a
+// positive code. Recognize both signs, without overflow for INT32_MIN.
+inline bool tlsAllocationError(int32_t code){uint32_t v=code<0?uint32_t(-int64_t(code)):uint32_t(code);return v==0x7f00||v==0x2880||v==0x3f80||v==0x0010||v==0x006a||v==0x4d80||v==0x5180||v==0x6180;}
 enum class State:uint8_t { Idle,Checking,Current,Available,Downloading,Verifying,Restarting,Error };
 enum class Error:uint8_t { None,Network,Clock,Http,Manifest,Memory,Partition,Expired,Download,Checksum,Image,Write,Busy,Battery,Dns,Connection,Tls,NotFound,RateLimit,Redirect };
 struct Status {State state=State::Idle;Error error=Error::None;uint8_t progress=0;int32_t detail=0;char version[24]={};char notes[3][192]={};};

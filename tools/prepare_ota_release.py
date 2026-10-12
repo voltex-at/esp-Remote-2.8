@@ -22,9 +22,9 @@ def metadata(app, version):
     return dict(schema=1, target=TARGET, version=version, size=len(app),
                 sha256=hashlib.sha256(app).hexdigest(),
                 url=f'https://github.com/{REPOSITORY}/releases/download/v{version}/firmware.bin',
-                notes={'pl':'Większy tekst i dotyk na podstronach, duża klawiatura. Strona główna bez zmian. HTTPS OTA zachowane.',
-                       'de':'Größere Schrift/Touchflächen, große Tastatur. Startseite unverändert. HTTPS OTA bleibt.',
-                       'en':'Larger submenu text and touch targets, large keyboard. Home unchanged. HTTPS OTA retained.'})
+                notes={'pl':'TLS 32512: bufory HTTPS korzystają z PSRAM, diagnostyka RAM. Zachowano większy UI i stronę główną.',
+                       'de':'TLS 32512: HTTPS-Puffer nutzen PSRAM, RAM-Diagnose. Große Oberfläche und Startseite bleiben.',
+                       'en':'TLS 32512: HTTPS buffers use PSRAM, RAM diagnostics. Larger UI and unchanged home retained.'})
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--out',type=Path,default=ROOT/'release');a=p.parse_args()
@@ -38,21 +38,15 @@ def main():
     (out/'ota.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     for name in ('PILOT_LCD_TEST_APP.bin','PILOT_LCD_TEST_FULL.bin'):
         shutil.copy2(ROOT/'firmware'/name,out/name)
-    (out/'notes.md').write_text(f'''ESP Remote v{version}: większe napisy i pola dotykowe na podstronach. Strona główna zachowana piksel w piksel PL/DE/EN. Opisy 20 px, wartości/objaśnienia zwykle 18 px; wiersze minimum 64 px. Większe przyciski Wstecz, skanu, OTA i kamery. Cały wiersz przełącznika jest aktywny; przewijane listy nie ściskają tekstu. Klawiatura 5×4 z dużymi klawiszami na stronach, wszystkie drukowalne znaki ASCII, ikona oka i zachowane maskowanie hasła. Szczegóły i podgląd: docs/LARGE_TOUCH_V1_3_4.md.
+    (out/'notes.md').write_text(f'''ESP Remote v{version}: poprawka błędu TLS 32512 (0x7F00, nieudana alokacja RAM). Domyślne SDK lokowało bufory TLS wyłącznie w RAM wewnętrznym. Wspierany alokator mbedTLS instalowany przed zadaniami sieciowymi preferuje PSRAM dla dużych buforów, z zapasową pulą. Zachowano zerowanie calloc i prawidłowe free. Log USB 115200 pokazuje wolną pamięć i największe bloki. Nowe komunikaty odróżniają brak RAM od błędu certyfikatu. Szczegóły: docs/TLS_MEMORY_V1_3_5.md.
 
-Zachowano HTTPS OTA z V1.3.3, certyfikaty CA, rozróżnianie DNS/TLS/HTTP, weryfikację obrazu i dwukrokowe potwierdzenie instalacji. Testy obejmują rzeczywisty LVGL, geometrię, przewijanie, wejście wskaźnika i porównanie strony głównej. Test na fizycznym pilocie nie został wykonany.
+V1.3.1–V1.3.4 z niedziałającym HTTPS wymagają jednorazowego USB. Po dotychczasowej instalacji merged i bez udanego OTA: firmware.bin pod 0x10000, bez Erase all — zachowuje ustawienia. Firmware-merged.bin pod 0x0 jest dla czystej instalacji i usuwa ustawienia. Sam zapis aplikacji nie przełącza slotu, jeśli wcześniejsze OTA wybrało inny.
 
-Jeśli V1.3.1/V1.3.2 nie może połączyć się z GitHub przez HTTPS, tę poprawkę wgraj jednorazowo przez USB. Po dotychczasowej instalacji merged i przed udanym OTA: firmware.bin pod 0x10000, bez kasowania pamięci — zachowuje ustawienia. firmware-merged.bin pod 0x0 to czysta instalacja i usuwa ustawienia. Sam zapis pod 0x10000 nie przełącza aktywnego slotu, jeśli wcześniejsze OTA wybrało inny. Szczegóły: docs/OTA_FIX_V1_3_3.md.
+Zachowano cały większy UI V1.3.4: strona główna piksel w piksel PL/DE/EN, napisy 20/18 px, duże pola dotykowe, przewijane listy i duża klawiatura. Zachowano certyfikaty, host/SHA-256 i potwierdzenie instalacji. Testy obejmują odtworzenie braku RAM, alokator, rzeczywisty LVGL i kompilację. Nie wykonano połączenia HTTPS/OTA na fizycznym pilocie.
 
-Zachowano czytelność V1.3.2: czarne tło, bielszy tekst, mocne kolory, fonty Montserrat SemiBold, widoczne suwaki oraz Test kolorów. Zachowano szybką ścieżkę LCD, pion, PL/DE/EN i schemat NVS.
+Po restarcie sprawdź: System → Aktualizacja OTA → Sprawdź. Wymagany router z internetem i czas NTP. Karta SD pozostaje na nagrania/logi; aktualizacja aplikacji zachowuje NVS. Przy czystej instalacji wybierz sieć i wpisz własne hasło. GitHub OTA nie wymaga tokena kamery; techniczne ArduinoOTA w LAN uruchamia się tylko z niepustym tokenem.
 
-USB: firmware.bin pod 0x10000 przy dotychczasowym pierwszym slocie aplikacji. firmware-merged.bin pod 0x0 jest dla czystej instalacji i usuwa ustawienia.
-Kolejne aktualizacje: System → Aktualizacja OTA → Sprawdź → Zainstaluj → Potwierdź. Wymagany router z internetem i czas NTP.
-Przy czystej instalacji wybierz sieć i wpisz własne hasło oraz token kamery. Firmware nie zawiera fabrycznych poświadczeń. Aktualizacja aplikacji zachowuje dane już zapisane w NVS; techniczne ArduinoOTA w LAN uruchamia się tylko z niepustym tokenem.
-
-Zachowano szybką ścieżkę LCD z V1.3.1, pion, PL/DE/EN, sensory, SD, diagnostykę restartu i schemat ustawień NVS. Nie zmieniono kalibracji, inwersji ani transmisji RGB565 działającego LCD. Ekran testowy pozwala porównać kolory panelu; podgląd z renderera nie jest zdjęciem urządzenia.
-
-Kompilacja oraz testy programowe w Actions. Nie wykonano testu na fizycznym pilocie. Automatyczny rollback nie jest skonfigurowany ani deklarowany.
+Nie zmieniono sterownika LCD, orientacji ani schematu NVS. Kompilacja i testy programowe w Actions. Test HTTPS/OTA na fizycznym pilocie wymaga potwierdzenia. Automatyczny rollback nie jest skonfigurowany.
 ''')
     checks=[]
     for path in sorted(out.iterdir()):

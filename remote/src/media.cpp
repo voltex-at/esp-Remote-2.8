@@ -75,7 +75,7 @@ void task(void*){
  if(!jpg||!decoded){message("Brak PSRAM dla obrazu kamery");vTaskDelete(nullptr);return;}
  TJpgDec.setJpgScale(1);TJpgDec.setSwapBytes(false);TJpgDec.setCallback(jpgBlock);
  for(;;){
- if(Ota::installing()){vTaskDelay(pdMS_TO_TICKS(50));continue;}
+ if(Ota::busy()){vTaskDelay(pdMS_TO_TICKS(50));continue;}
  AppState s=snapshot();Command cmd;
  while(xQueueReceive(mediaCommands,&cmd,0)==pdTRUE){switch(cmd.action){
  case Action::Snapshot:if(s.camera){int n=fetch(s.settings);if(n>0)snapshotPhoto(n);else message("Nie pobrano zdjecia");}else message("Kamera offline");break;

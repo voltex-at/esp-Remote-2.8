@@ -123,6 +123,8 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
   s.ota.error=Ota::Error::Tls;s.ota.detail=-9984;Ui::update(s);
   const char*tlsTexts[]={"Błąd HTTPS/TLS. Kod: -9984","HTTPS/TLS-Fehler. Code: -9984","HTTPS/TLS error. Code: -9984"};assert(findLabel(lv_scr_act(),tlsTexts[lang]));
   snprintf(name,sizeof name,"%s/ota_error_%d.ppm",argv[1],lang);save(name);
+  s.ota.error=Ota::Error::Memory;s.ota.detail=32512;Ui::update(s);const char*ramTexts[]={"Brak RAM dla HTTPS.\nKod: 32512","Zu wenig RAM für HTTPS.\nCode: 32512","Not enough RAM for HTTPS.\nCode: 32512"};assert(findLabel(lv_scr_act(),ramTexts[lang]));
+  snprintf(name,sizeof name,"%s/ota_memory_%d.ppm",argv[1],lang);save(name);
   s.ota=Ota::Status{};Ui::update(s);
  }
  capture=false;

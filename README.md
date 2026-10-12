@@ -5,6 +5,10 @@ Wi-Fi z wyszukiwaniem sieci i klawiaturą hasła, języki polski/niemiecki/angie
 sensory BME688/BSEC2 i SCD41 przez I²C/pogo, ESP-CAM przez router lub Direct,
 karta SD przeznaczona na nagrania i logi. Nie zmieniono schematu ustawień V1.2.
 
+V1.3.5 naprawia alokację pamięci TLS dla błędu **32512 / 0x7F00**: duże bufory
+preferują PSRAM, z zapasową pulą i diagnostyką RAM. Zachowano większy interfejs.
+[Opis i instrukcja jednorazowego USB](docs/TLS_MEMORY_V1_3_5.md).
+
 V1.3.4 powiększa napisy i pola dotykowe na podstronach; strona główna pozostaje
 identyczna. Wiersze minimum 64 px, tekst 20/18 px, większe przyciski, aktywny cały
 wiersz przełącznika i klawiatura z dużymi klawiszami na stronach.
@@ -54,5 +58,5 @@ Istniejące wydania nie są nadpisywane. Każdy commit nie oznacza nowego wydani
 Pełna dokumentacja sprzętu i funkcji: [README_PL.md](README_PL.md).
 OTA: [docs/OTA.md](docs/OTA.md). Diagnostyka LCD: [docs/LCD_FIX_V1_2.md](docs/LCD_FIX_V1_2.md).
 
-V1.3.4 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
+V1.3.5 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
 działania LCD, sensorów, radia ani aktualizacji przy zaniku zasilania.

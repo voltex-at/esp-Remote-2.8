@@ -224,7 +224,7 @@ static const char*otaText(){using Ota::State;using Ota::Error;
  case Error::RateLimit:return tr("GitHub odrzuca żądanie. Spróbuj później.","GitHub lehnt Anfrage ab. Später erneut.","GitHub rejected request. Retry later.");
  case Error::Redirect:return tr("Błąd przekierowania GitHub.","GitHub-Weiterleitung fehlgeschlagen.","GitHub redirect failed.");
  case Error::Manifest:return tr("Nieprawidłowy opis wydania.","Ungültige Release-Daten.","Invalid release metadata.");
- case Error::Memory:return tr("Za mało pamięci. Uruchom ponownie.","Zu wenig RAM. Neu starten.","Low memory. Restart device.");
+ case Error::Memory:{if(data.ota.detail){static char text[100];snprintf(text,sizeof text,tr("Brak RAM dla HTTPS.\nKod: %ld","Zu wenig RAM für HTTPS.\nCode: %ld","Not enough RAM for HTTPS.\nCode: %ld"),long(data.ota.detail));return text;}return tr("Brak pamięci RAM.","Zu wenig RAM.","Not enough RAM.");}
  case Error::Partition:return tr("Błąd partycji OTA.","OTA-Partitionsfehler.","OTA partition error.");
  case Error::Expired:return tr("Sprawdź aktualizacje ponownie.","Updates erneut prüfen.","Check updates again.");
  case Error::Download:return tr("Przerwany transfer. Ponów próbę.","Transfer abgebrochen. Erneut.","Download interrupted. Retry.");

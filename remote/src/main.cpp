@@ -2,6 +2,7 @@
 #include "ui.h"
 #include "wifi_networks.h"
 #include "ota.h"
+#include "tls_memory.h"
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <esp_heap_caps.h>
@@ -137,6 +138,7 @@ void setup(){
  stage(BootStage::Config);load();if(!psramFound()){Board::bootError("PSRAM not found","Check N16R8 / qio_opi");return;}
  // Prove the custom LVGL allocator works, rather than letting lv_init assert.
  void*probe=heap_caps_malloc(256*1024,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);if(!probe){Board::bootError("PSRAM allocation failed","LVGL needs external RAM");return;}heap_caps_free(probe);
+ if(!TlsMemory::begin()){Board::bootError("TLS allocator init failed","Check PSRAM / USB log");return;}
  stage(BootStage::Lvgl);Board::bootStatus("LVGL startup","RGB565 / native portrait");lv_init();if(!Board::begin()){Board::bootError("LVGL display allocation failed","Read the USB startup log");return;}
  videoPixels=(uint16_t*)ps_calloc(224*168,2);if(!videoPixels){message("Wymagana PSRAM OPI 8MB");}
  Ui::begin(dispatch);Ui::update(snapshot());Board::brightness(snapshot().settings.brightness);lv_refr_now(nullptr);

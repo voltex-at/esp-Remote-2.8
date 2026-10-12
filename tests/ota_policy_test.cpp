@@ -5,6 +5,8 @@
 int main(){
  uint32_t v[3];for(auto*s:{"","1","1.2","v1.3.0","1.2.3.4","-1.2.3","65536.0.0","999999999999.1.2","1.2.3-beta","1.2.3\n"})assert(!Ota::versionParts(s,v));
  assert(!Ota::versionParts(nullptr,v));assert(Ota::versionParts("1.3.0",v)&&v[1]==3);
+ for(auto code:{0x7f00,0x2880,0x3f80,0x0010,0x006a,0x4d80,0x5180,0x6180}){assert(Ota::tlsAllocationError(code));assert(Ota::tlsAllocationError(-code));}
+ for(auto code:{0,-9984,9984,0x8001,0x801a,INT32_MIN,INT32_MAX})assert(!Ota::tlsAllocationError(code));
  assert(Ota::newer("1.10.0","1.9.9"));assert(!Ota::newer("1.3.0","1.3.0"));assert(!Ota::newer("1.2.9","1.3.0"));assert(!Ota::newer("invalid","1.3.0"));
  assert(Ota::validHash(std::string(64,'a').c_str()));for(auto s:{std::string(63,'a'),std::string(65,'a'),std::string(64,'g'),std::string(64,'A')})assert(!Ota::validHash(s.c_str()));
  assert(Ota::allowedUrl(Ota::MANIFEST));assert(Ota::allowedUrl("https://release-assets.githubusercontent.com/file?token=x"));
