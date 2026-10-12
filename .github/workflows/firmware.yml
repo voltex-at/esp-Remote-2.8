@@ -33,6 +33,8 @@ jobs:
           /tmp/theme_test
           g++ -std=c++11 -I remote/include tests/video_geometry_test.cpp -o /tmp/video_test
           /tmp/video_test
+          g++ -std=c++11 -I remote/include tests/battery_monitor_test.cpp -o /tmp/battery_test
+          /tmp/battery_test
           g++ -std=c++17 -I remote/include tests/portrait_test.cpp -o /tmp/portrait_test
           /tmp/portrait_test
           g++ -std=c++17 -I tests/display_stub -I remote/include tests/display_transport_test.cpp remote/src/portrait_display.cpp -o /tmp/lcd_test

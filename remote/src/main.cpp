@@ -157,7 +157,7 @@ void setup(){
 }
 void loop(){
  if(!ready){static uint32_t report=0;if(millis()-report>2000){report=millis();Board::bootReport();}delay(100);return;}
- static uint32_t tick=millis(),uiTick=0,batteryTick=0,saveDue=0;uint32_t now=millis();lv_tick_inc(now-tick);tick=now;
+ static uint32_t tick=millis(),uiTick=0,batteryTick=0,housekeepingTick=0,saveDue=0;uint32_t now=millis();lv_tick_inc(now-tick);tick=now;
  Command c;while(xQueueReceive(commands,&c,0)==pdTRUE){
  if(Ota::installing())continue;
  switch(c.action){
@@ -174,7 +174,8 @@ void loop(){
  case Action::Reboot:ESP.restart();break;
  default:if(xQueueSend(mediaCommands,&c,0)!=pdTRUE)message("Kolejka kamery pelna");break;
  }}(void)saveDue;
- if(now-batteryTick>=2000){batteryTick=now;Board::battery();struct tm tm;if(getLocalTime(&tm,0)){Guard g(stateMutex);strftime(state.timeText,sizeof state.timeText,"%H:%M",&tm);} uint64_t freeBytes=0;{Guard sd(sdMutex);if(snapshot().sd){uint64_t total=SD_MMC.totalBytes(),used=SD_MMC.usedBytes();freeBytes=total>=used?total-used:0;}}{Guard g(stateMutex);state.uptime=now/1000;state.sdFree=freeBytes;}}
+ if(now-batteryTick>=500){batteryTick=now;Board::battery();}
+ if(now-housekeepingTick>=2000){housekeepingTick=now;struct tm tm;if(getLocalTime(&tm,0)){Guard g(stateMutex);strftime(state.timeText,sizeof state.timeText,"%H:%M",&tm);strftime(state.dateText,sizeof state.dateText,"%d.%m.%Y",&tm);} uint64_t freeBytes=0;{Guard sd(sdMutex);if(snapshot().sd){uint64_t total=SD_MMC.totalBytes(),used=SD_MMC.usedBytes();freeBytes=total>=used?total-used:0;}}{Guard g(stateMutex);state.uptime=now/1000;state.sdFree=freeBytes;}}
  if(now-uiTick>=200){uiTick=now;{Guard g(stateMutex);state.ota=Ota::status();}Ui::update(snapshot());if(videoPixels&&xSemaphoreTake(frameMutex,0)==pdTRUE){if(videoDirty){Ui::frame(videoPixels);videoDirty=false;}xSemaphoreGive(frameMutex);}}
  uint32_t idle=lv_disp_get_inactive_time(nullptr);Settings s=snapshot().settings;
  static bool dark=false;bool shouldDark=idle>(uint32_t)s.timeoutSec*1000&&!snapshot().talking&&!Ota::busy();

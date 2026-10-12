@@ -55,13 +55,10 @@ void readTouch(lv_indev_drv_t*,lv_indev_data_t*d){
  }xSemaphoreGive(i2cMutex);
 }
 void battery(){
- uint32_t mv=0;for(int i=0;i<16;i++)mv+=analogReadMilliVolts(Pins::battery);
- float v=(mv/16000.0f)*BATTERY_DIVIDER*BATTERY_CALIBRATION;
- static float filtered=0;filtered=filtered==0?v:filtered*.90f+v*.10f;
- const float volts[]={3.20,3.45,3.60,3.70,3.78,3.85,3.95,4.05,4.15,4.20};
- const int pc[]={0,5,10,20,35,50,65,80,95,100};int pct=-1;
- if(filtered>=2.5f&&filtered<=4.6f){pct=100;for(int i=1;i<10;i++)if(filtered<volts[i]){pct=pc[i-1]+(filtered-volts[i-1])/(volts[i]-volts[i-1])*(pc[i]-pc[i-1]);break;}pct=constrain(pct,0,100);}
- {Guard g(stateMutex);state.batteryV=filtered;state.batteryPct=pct;}
+ uint32_t samples[16];for(auto&mv:samples)mv=analogReadMilliVolts(Pins::battery);std::sort(samples,samples+16);
+ float v=((samples[7]+samples[8])/2000.0f)*BATTERY_DIVIDER*BATTERY_CALIBRATION;
+ static Battery::Monitor monitor;auto reading=monitor.sample(v,millis());int pct=reading.percent;
+ {Guard g(stateMutex);state.batteryV=reading.voltage;state.batteryPct=pct;state.batteryPower=reading.power;}
  static bool low=false;if(pct>=0&&pct<=15&&!low){low=true;alert("Niski poziom baterii");}if(pct>20)low=false;
 }
 // Register sequence adapted from Espressif ES8311 (Apache-2.0), 4.096MHz MCLK / 16kHz / 16-bit stereo slots.

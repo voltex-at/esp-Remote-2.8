@@ -12,7 +12,9 @@ namespace Ui {
 static AppState data;static Dispatch send=nullptr;static Screen page=Screen::Home,pending=Screen::Home;
 static int metric=0,pendingMetric=0;static bool rebuild=false;static Screen appearanceBack=Screen::Settings,cameraSettingsBack=Screen::Settings;
 static lv_obj_t *root,*body,*clockLabel,*batteryLabel,*wifiIcon,*notice,*image,*valueLabel,*onlineLabel,*minLabel,*maxLabel,*chart,*recordLabel,*sensorInfo,*wave;
-static lv_obj_t*sensorValues[6]={};static lv_obj_t*sensorStates[6]={};
+static lv_obj_t*sensorValues[6]={};static lv_obj_t*sensorStates[6]={};static lv_obj_t*sensorGlyphs[6]={};static lv_obj_t*sensorCards[6]={};static lv_obj_t*sensorStatusText[6]={};
+static lv_obj_t *dateLabel=nullptr,*batteryStatus=nullptr;
+struct BatteryIcon {lv_obj_t *shell=nullptr,*cap=nullptr,*bars[4]={},*bolt=nullptr;};static BatteryIcon topBattery,detailBattery;
 static lv_chart_series_t*series;static lv_color_t*imageBuf=nullptr;
 static bool frameReady=false,liveFit=false,hudVisible=true,volumeOpen=false;
 static lv_obj_t*liveHud=nullptr,*liveEmpty=nullptr,*liveEmptyTitle=nullptr,*liveEmptyHint=nullptr,*liveStatus=nullptr,*liveSettings=nullptr,*liveButtons[4]={},*liveGlyphs[4]={},*volumeSlider=nullptr;
@@ -46,6 +48,24 @@ static int flowY(){lv_obj_update_layout(body);int end=-8;for(uint32_t i=0;i<lv_o
 static lv_obj_t*flowText(const char*s,const lv_font_t*f=&font_body18,uint32_t c=MUTED){return wrapped(body,s,8,flowY(),208,f,c);}
 static lv_obj_t*icon(lv_obj_t*p,const lv_img_dsc_t*i,int x,int y,uint32_t c=TEXT,int zoom=256){auto*o=lv_img_create(p);lv_img_set_src(o,i);lv_obj_clear_flag(o,LV_OBJ_FLAG_CLICKABLE);lv_obj_set_pos(o,x,y);lv_img_set_zoom(o,zoom);lv_obj_set_style_img_recolor(o,col(c),0);lv_obj_set_style_img_recolor_opa(o,LV_OPA_COVER,0);return o;}
 static lv_obj_t*box(lv_obj_t*p,int x,int y,int w,int h,uint32_t bg=CARD){auto*o=lv_obj_create(p);style(o,bg);lv_obj_set_pos(o,x,y);lv_obj_set_size(o,w,h);lv_obj_clear_flag(o,LV_OBJ_FLAG_SCROLLABLE);return o;}
+static BatteryIcon batteryIcon(lv_obj_t*p,int x,int y,int w,int h,uint32_t ink){
+ BatteryIcon b;auto*holder=box(p,x,y,w,h,BG);style(holder,BG,0,0);lv_obj_set_style_bg_opa(holder,LV_OPA_TRANSP,0);lv_obj_clear_flag(holder,LV_OBJ_FLAG_CLICKABLE);
+ int sw=w*2/3,sh=h-4;b.shell=box(holder,0,2,sw,sh,BG);style(b.shell,BG,3,1);lv_obj_set_style_bg_opa(b.shell,LV_OPA_TRANSP,0);lv_obj_set_style_border_width(b.shell,h>=40?2:1,0);lv_obj_set_style_border_color(b.shell,col(ink),0);lv_obj_clear_flag(b.shell,LV_OBJ_FLAG_CLICKABLE);
+ b.cap=box(holder,sw,sh/3+2,2,sh/3,ink);style(b.cap,ink,1,0);lv_obj_clear_flag(b.cap,LV_OBJ_FLAG_CLICKABLE);
+ int bw=std::max(2,(sw-8)/4);for(int i=0;i<4;i++){b.bars[i]=box(b.shell,3+i*(bw+1),3,bw,std::max(3,sh-6),LIME);style(b.bars[i],LIME,1,0);lv_obj_clear_flag(b.bars[i],LV_OBJ_FLAG_CLICKABLE);}
+ b.bolt=icon(holder,&img_bolt,sw+2,h/5,LIME,h*153/28);lv_img_set_pivot(b.bolt,0,0);return b;
+}
+static void updateBatteryIcon(BatteryIcon&b,uint32_t ink){if(!b.shell)return;
+ lv_obj_set_style_border_color(b.shell,col(ink),0);lv_obj_set_style_bg_color(b.cap,col(ink),0);
+ int count=Battery::segments(data.batteryPct,data.batteryPower,lv_tick_get());
+ uint32_t fill=data.batteryPct<=15&&data.batteryPower==Battery::Power::Battery?RED:LIME;
+ for(int i=0;i<4;i++){lv_obj_set_style_bg_color(b.bars[i],col(i<count?fill:TRACK),0);lv_obj_set_style_bg_opa(b.bars[i],i<count?LV_OPA_COVER:LV_OPA_40,0);}
+ if(data.batteryPower!=Battery::Power::Battery&&data.batteryPct>=0)lv_obj_clear_flag(b.bolt,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(b.bolt,LV_OBJ_FLAG_HIDDEN);
+}
+static const char*batteryStateText(){if(data.batteryPct<0)return tr("Brak odczytu","Kein Messwert","No reading");
+ if(data.batteryPower==Battery::Power::Charging)return tr("Ładowanie · szacunek","Laden · geschätzt","Charging · estimated");
+ if(data.batteryPower==Battery::Power::External)return tr("Zasilanie podłączone","Versorgung erkannt","Power connected");
+ return tr("Zasilanie z baterii","Akkubetrieb","Battery power");}
 static void next(Screen s,int m=0){pending=s;pendingMetric=m;rebuild=true;}
 static void connectSelected(const char*password){
  bool direct=!strcmp(joinSsid,"ESP32-BABY-CAM")||(!strcmp(joinSsid,data.settings.ssid)&&data.settings.networkMode==0);
@@ -159,8 +179,8 @@ static void footer(){auto*bar=box(root,0,268,240,52,BG);const lv_img_dsc_t*ic[]=
 static void metricCard(lv_obj_t*p,int m,int x,int y,int w,int h){auto*c=box(p,x,y,w,h);icon(c,metricIcon(m),7,8,m==0?LIME:TEXT,205);label(c,m==0?tr("Temp.","Temp.","Temp."):tr("Wilg.","Feuchte","Humidity"),35,10,w-41,&font_body18,MUTED);char n[32];bool valid=metricValid(data,m)&&isfinite(metricValue(data,m));if(valid)snprintf(n,sizeof n,m==0||m==4?"%.1f %s":"%.0f %s",metricValue(data,m),unit(m));else snprintf(n,sizeof n,"— %s",unit(m));auto*l=label(c,n,4,47,w-8,&font_ui20);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);bind(c,0,m,Screen::Metric);}
 static void sensorHeader(lv_obj_t*p,int m,int y){auto*c=box(p,0,y,224,88);label(c,names(m),12,9,200,rowFont(names(m),200));icon(c,metricIcon(m),10,45,LIME);onlineLabel=wrapped(c,metricValid(data,m)?tr("● Połączony","● Verbunden","● Connected"):tr("○ Brak danych","○ Keine Werte","○ No data"),48,47,164,&font_body18,metricValid(data,m)?LIME:MUTED);}
 static void home(){
- auto*mount=lv_img_create(root);lv_img_set_src(mount,data.theme==ThemeMode::Light?&img_mountains_light:&img_mountains);lv_obj_set_pos(mount,0,38);
- auto*l=label(root,"ESP32",0,45,240,&lv_font_montserrat_32);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);l=label(root,"R E M O T E",0,81,240,&font_ui14);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);
+ auto*mount=lv_img_create(root);lv_img_set_src(mount,data.theme==ThemeMode::Light?&img_mountains_light:&img_mountains);lv_obj_set_pos(mount,0,62);
+ auto*l=label(root,"ESP32",0,69,240,&lv_font_montserrat_32);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);l=label(root,"R E M O T E",0,105,240,&font_ui14);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);
  const lv_img_dsc_t*ico[]={&img_camera,&img_sensor,&img_settings,&img_link};const char*txt[]={tr("Kamera","Kamera","Camera"),tr("Sensory","Sensoren","Sensors"),tr("Ustawienia","Einstellungen","Settings"),tr("Połączenie","Verbindung","Connect")};Screen dst[]={Screen::Cameras,Screen::Sensors,Screen::Settings,Screen::Network};
  for(int i=0;i<4;i++){auto*b=button(root,"",9+(i%2)*115,148+(i/2)*76,106,69);if(i==0){lv_obj_set_style_border_color(b,col(LIME),0);lv_obj_set_style_border_width(b,2,0);}icon(b,ico[i],38,7,i==0?LIME:TEXT,280);const lv_font_t*f=lv_txt_get_width(txt[i],strlen(txt[i]),&font_ui14,0,LV_TEXT_FLAG_NONE)<=102?&font_ui14:&font_ui12;auto*t=label(b,txt[i],2,47,102,f,i==0?LIME:TEXT);lv_obj_set_style_text_align(t,LV_TEXT_ALIGN_CENTER,0);bind(b,0,0,dst[i]);}
  auto*dot=box(root,107,306,8,8,LIME);lv_obj_set_style_radius(dot,4,0);dot=box(root,124,306,8,8,INACTIVE_DOT);lv_obj_set_style_radius(dot,4,0);
@@ -200,7 +220,7 @@ static void live(){
  auto*frame=box(root,0,0,240,320,0x080b0f);style(frame,0x080b0f,0,0);lv_obj_add_event_cb(frame,[](lv_event_t*){if(hudVisible&&liveHud){lv_point_t p;auto*input=lv_indev_get_act();if(input){lv_indev_get_point(input,&p);for(uint32_t i=0;i<lv_obj_get_child_cnt(liveHud);i++){auto*c=lv_obj_get_child(liveHud,i);if(!lv_obj_check_type(c,&lv_btn_class))continue;lv_area_t a;lv_obj_get_coords(c,&a);if(p.x>=a.x1&&p.x<=a.x2&&p.y>=a.y1&&p.y<=a.y2)return;}}}hudVisible=!hudVisible;refreshLive();},LV_EVENT_CLICKED,nullptr);
  if(imageBuf){image=lv_img_create(frame);lv_img_set_src(image,&liveImage);lv_obj_clear_flag(image,LV_OBJ_FLAG_CLICKABLE);lv_img_set_antialias(image,true);}
  liveEmpty=box(frame,10,103,220,124,0x101820);style(liveEmpty,0x101820,14,0);lv_obj_clear_flag(liveEmpty,LV_OBJ_FLAG_CLICKABLE);icon(liveEmpty,&img_camera,96,8,0xffffff);auto*l=wrapped(liveEmpty,!imageBuf?tr("Brak pamięci obrazu","Bildspeicher fehlt","No video memory"):data.camera||data.playing?tr("Ładowanie obrazu…","Bild wird geladen…","Loading video…"):tr("Brak obrazu","Kein Bild","No video"),10,45,200,&font_ui20,0xffffff);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);liveEmptyTitle=l;l=wrapped(liveEmpty,tr("Sprawdź połączenie","Verbindung prüfen","Check connection"),10,83,200,&font_body18,0xcbd3da);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);liveEmptyHint=l;
- auto*status=box(frame,0,0,240,24,0x101820);style(status,0x101820,0,0);lv_obj_set_style_bg_opa(status,LV_OPA_80,0);lv_obj_clear_flag(status,LV_OBJ_FLAG_CLICKABLE);clockLabel=label(status,data.timeText,10,5,55,&font_ui14,0xffffff);wifiIcon=icon(status,&img_wifi,163,1,0xffffff,150);icon(status,&img_battery,183,0,0xffffff,130);batteryLabel=label(status,"—",201,6,37,&font_ui12,0xffffff);lv_obj_set_style_text_align(batteryLabel,LV_TEXT_ALIGN_RIGHT,0);
+ auto*status=box(frame,0,0,240,24,0x101820);style(status,0x101820,0,0);lv_obj_set_style_bg_opa(status,LV_OPA_80,0);lv_obj_clear_flag(status,LV_OBJ_FLAG_CLICKABLE);clockLabel=label(status,data.timeText,10,5,55,&font_ui14,0xffffff);wifiIcon=icon(status,&img_wifi,147,3,0xffffff,170);lv_img_set_pivot(wifiIcon,0,0);topBattery=batteryIcon(status,170,4,28,16,0xffffff);batteryLabel=label(status,"—",202,6,36,&font_ui12,0xffffff);lv_obj_set_style_text_align(batteryLabel,LV_TEXT_ALIGN_RIGHT,0);
  liveHud=box(frame,0,0,240,320,0);style(liveHud,0,0,0);lv_obj_set_style_bg_opa(liveHud,LV_OPA_TRANSP,0);lv_obj_clear_flag(liveHud,LV_OBJ_FLAG_CLICKABLE);
  auto*back=mediaButton(liveHud,&img_back,8,30);lv_obj_add_event_cb(back,[](lv_event_t*){if(Ota::installing(data.ota.state))return;if(data.playing)send(Action::Play,0,"");next(Screen::Cameras);},LV_EVENT_CLICKED,nullptr);
  auto*fit=mediaButton(liveHud,&img_expand,66,30);bind(fit,16);auto*vol=mediaButton(liveHud,&img_volume,188,30);bind(vol,17);liveStatus=label(liveHud,"LIVE",114,42,66,&font_body18,0xffffff);
@@ -210,9 +230,25 @@ static void live(){
 }
 static const char*shortMetric(int m){switch(m){case 0:return tr("Temp.","Temp.","Temp.");case 1:return tr("Wilgotn.","Feuchte","Humidity");case 2:return "CO₂";case 3:return "IAQ";case 4:return tr("Ciśn.","Druck","Pressure");default:return "eCO₂";}}
 static void sensorReading(int m,char*text,size_t size){if(metricValid(data,m)&&isfinite(metricValue(data,m)))snprintf(text,size,m==0?"%.1f":"%.0f",metricValue(data,m));else snprintf(text,size,"—");}
-static void sensors(){title(tr("Sensory","Sensoren","Sensors"));lv_obj_set_width(lv_obj_get_child(root,-1),132);auto*scanButton=button(root,"",188,24,44,44);icon(scanButton,&img_plus,8,8,LIME);bind(scanButton,0,0,Screen::Scan);makeBody();
- for(int m=0;m<6;m++){bool valid=metricValid(data,m)&&isfinite(metricValue(data,m));auto*r=box(body,(m%2)*116,(m/2)*124,108,116);icon(r,metricIcon(m),10,9,valid?LIME:MUTED,220);label(r,unit(m),42,11,44,&font_body18,MUTED);auto*dot=box(r,92,12,8,8,valid?LIME:MUTED);style(dot,valid?LIME:MUTED,4,0);lv_obj_clear_flag(dot,LV_OBJ_FLAG_CLICKABLE);sensorStates[m]=dot;label(r,shortMetric(m),10,42,88,&font_body18,TEXT);char reading[32];sensorReading(m,reading,sizeof reading);sensorValues[m]=label(r,reading,10,72,88,lv_txt_get_width(reading,strlen(reading),&lv_font_montserrat_28,0,LV_TEXT_FLAG_NONE)>88?&font_ui22:&lv_font_montserrat_28);bind(r,0,m,Screen::Metric);}
- flowText(tr("Dotknij pomiaru, aby otworzyć wykres.","Messwert antippen für den Verlauf.","Tap a reading to open its chart."));auto*b=button(body,tr("Podłącz sensor","Sensor koppeln","Connect sensor"),0,0,224,64);bind(b,0,0,Screen::Scan);navRow(&img_settings,tr("Ustawienia sensorów","Sensor-Einstellungen","Sensor settings"),Screen::SensorSettings,0);
+static bool sensorWarning(int m){if(!metricValid(data,m)||!isfinite(metricValue(data,m)))return false;float v=metricValue(data,m);
+ if(m==0)return v<data.settings.tempMin||v>data.settings.tempMax;
+ if(m==1)return v<data.settings.humidityMin||v>data.settings.humidityMax;
+ return m==2?v>data.settings.co2Max:m==3?v>data.settings.iaqMax:false;}
+static void refreshSensor(int m){if(!sensorValues[m])return;bool valid=metricValid(data,m)&&isfinite(metricValue(data,m)),warning=sensorWarning(m);uint32_t status=valid?(warning?RED:LIME):MUTED;
+ char reading[32];sensorReading(m,reading,sizeof reading);lv_label_set_text(sensorValues[m],reading);lv_obj_set_style_text_font(sensorValues[m],lv_txt_get_width(reading,strlen(reading),&lv_font_montserrat_28,0,LV_TEXT_FLAG_NONE)>92?&font_ui22:&lv_font_montserrat_28,0);lv_obj_set_style_text_color(sensorValues[m],col(warning?RED:TEXT),0);
+ lv_obj_set_style_img_recolor(sensorGlyphs[m],col(status),0);lv_obj_set_style_bg_color(sensorStates[m],col(status),0);lv_obj_set_style_text_color(sensorStatusText[m],col(status),0);lv_label_set_text(sensorStatusText[m],!valid?tr("Brak","Fehlt","No data"):warning?tr("Alarm","Alarm","Alert"):"OK");
+ lv_obj_set_style_border_color(sensorCards[m],col(warning?RED:BORDER),0);lv_obj_set_style_border_width(sensorCards[m],warning||data.theme==ThemeMode::Light?2:0,0);
+}
+static void sensors(){title(tr("Sensory","Sensoren","Sensors"));lv_obj_set_width(lv_obj_get_child(root,-1),132);
+ auto*settingsButton=button(root,"",188,24,44,44);icon(settingsButton,&img_settings,8,8,LIME);bind(settingsButton,0,0,Screen::SensorSettings);makeBody();lv_obj_clear_flag(body,LV_OBJ_FLAG_SCROLLABLE);
+ for(int m=0;m<6;m++){
+  bool valid=metricValid(data,m)&&isfinite(metricValue(data,m));auto*r=box(body,(m%2)*116,(m/2)*82,108,76);sensorCards[m]=r;
+  sensorGlyphs[m]=icon(r,metricIcon(m),6,4,valid?LIME:MUTED,160);lv_img_set_pivot(sensorGlyphs[m],0,0);
+  label(r,shortMetric(m),28,5,72,&font_ui14,TEXT);
+  char reading[32];sensorReading(m,reading,sizeof reading);sensorValues[m]=label(r,reading,8,25,92,lv_txt_get_width(reading,strlen(reading),&lv_font_montserrat_28,0,LV_TEXT_FLAG_NONE)>92?&font_ui22:&lv_font_montserrat_28);
+  label(r,unit(m),8,58,30,&font_ui12,MUTED);sensorStatusText[m]=label(r,"",39,58,46,&font_ui12,MUTED);lv_obj_set_style_text_align(sensorStatusText[m],LV_TEXT_ALIGN_RIGHT,0);
+  auto*dot=box(r,91,60,7,7,valid?LIME:MUTED);style(dot,valid?LIME:MUTED,4,0);lv_obj_clear_flag(dot,LV_OBJ_FLAG_CLICKABLE);sensorStates[m]=dot;bind(r,0,m,Screen::Metric);refreshSensor(m);
+ }
 }
 static void metricPage(){title(names(metric),Screen::Sensors);makeBody();sensorHeader(body,metric,0);
  char n[40];if(metricValid(data,metric)&&isfinite(metricValue(data,metric)))snprintf(n,sizeof n,metric==0||metric==4?"%.1f %s":"%.0f %s",metricValue(data,metric),unit(metric));else snprintf(n,sizeof n,"— %s",unit(metric));valueLabel=label(body,n,0,100,224,&lv_font_montserrat_32);lv_obj_set_style_text_align(valueLabel,LV_TEXT_ALIGN_CENTER,0);
@@ -320,9 +356,14 @@ static void updatePage(){title(tr("Aktualizacja","Software","Firmware"),Screen::
 void show(Screen s,int m){if(s==Screen::Live&&page!=Screen::Live)hudVisible=true;page=s;pending=s;palette();metric=std::max(0,std::min(5,m));rebuild=false;bindCount=0;image=valueLabel=onlineLabel=minLabel=maxLabel=chart=recordLabel=sensorInfo=wave=nullptr;overlay=editor=keyboard=editorHint=revealLabel=nullptr;joiningWifi=false;
  otaCheckButton=otaInstallButton=otaProgress=otaPercent=nullptr;otaConfirm=false;
  for(auto&v:sensorValues)v=nullptr;for(auto&v:sensorStates)v=nullptr;
- clockLabel=batteryLabel=wifiIcon=liveSettings=nullptr;liveHud=liveEmpty=liveEmptyTitle=liveEmptyHint=liveStatus=volumeSlider=nullptr;volumeOpen=false;for(auto&v:liveButtons)v=nullptr;for(auto&v:liveGlyphs)v=nullptr;
+ clockLabel=batteryLabel=wifiIcon=liveSettings=dateLabel=batteryStatus=nullptr;topBattery=BatteryIcon();detailBattery=BatteryIcon();liveHud=liveEmpty=liveEmptyTitle=liveEmptyHint=liveStatus=volumeSlider=nullptr;volumeOpen=false;for(auto&v:liveButtons)v=nullptr;for(auto&v:liveGlyphs)v=nullptr;
  if(!root)root=lv_obj_create(nullptr);else lv_obj_clean(root);body=nullptr;style(root,BG,0,0);lv_obj_set_style_text_font(root,&font_ui14,0);lv_obj_clear_flag(root,LV_OBJ_FLAG_SCROLLABLE);lv_scr_load(root);
- if(s!=Screen::Live){clockLabel=label(root,data.timeText,10,5,55,&font_ui14);wifiIcon=icon(root,&img_wifi,163,1,data.wifi?TEXT:MUTED,150);icon(root,&img_battery,183,0,TEXT,130);batteryLabel=label(root,"—",201,6,37,&font_ui12);lv_obj_set_style_text_align(batteryLabel,LV_TEXT_ALIGN_RIGHT,0);}
+ if(s!=Screen::Live){bool home=s==Screen::Home;clockLabel=label(root,data.timeText,10,home?6:5,home?92:55,home?&font_ui22:&font_ui14);
+  wifiIcon=icon(root,&img_wifi,home?114:147,home?3:0,data.wifi?TEXT:MUTED,home?256:170);lv_img_set_pivot(wifiIcon,0,0);
+  topBattery=batteryIcon(root,home?148:170,home?6:4,home?40:28,home?22:16,TEXT);
+  batteryLabel=label(root,"—",home?188:202,home?10:6,home?46:36,home?&font_ui16:&font_ui12);lv_obj_set_style_text_align(batteryLabel,LV_TEXT_ALIGN_RIGHT,0);
+  if(home)dateLabel=label(root,data.dateText,10,35,220,&font_ui18,MUTED);
+ }
  switch(s){
  case Screen::Home:home();break;case Screen::Live:live();break;case Screen::Sensors:sensors();break;case Screen::Metric:metricPage();break;case Screen::Settings:settings();break;case Screen::Network:network();break;case Screen::Scan:scan();break;case Screen::Recordings:gallery();break;case Screen::WifiNetworks:wifiNetworks();break;case Screen::Languages:languages();break;case Screen::Appearance:appearance();break;case Screen::Update:updatePage();break;
  case Screen::Cameras:title(tr("Kamery","Kameras","Cameras"));makeBody(188);{const char*cameraTitle=tr("Podgląd","Live-Bild","Live view");auto*f=rowFont(cameraTitle,164);int h=wrappedHeight(cameraTitle,164,f);auto*r=box(body,0,0,224,std::max(88,h+font_ui18.line_height+24));lv_obj_set_style_border_color(r,col(LIME),0);icon(r,&img_camera,10,22,LIME);wrapped(r,cameraTitle,48,10,164,f);label(r,data.camera?tr("● Połączona","● Verbunden","● Online"):tr("○ Offline","○ Offline","○ Offline"),48,16+h,164,&font_body18,data.camera?LIME:MUTED);bind(r,0,0,Screen::Live);}navRow(&img_folder,tr("Nagrania i zdjęcia","Aufnahmen & Fotos","Recordings & photos"),Screen::Recordings,83);navRow(&img_settings,tr("Ustawienia kamery","Kamera-Einstellungen","Camera settings"),Screen::CameraSettings,132);navRow(&img_volume,tr("Ustawienia audio","Audio-Einstellungen","Audio settings"),Screen::AudioSettings,181);send(Action::LoadFiles,0,"");footer();break;
@@ -342,11 +383,17 @@ void show(Screen s,int m){if(s==Screen::Live&&page!=Screen::Live)hudVisible=true
  {auto*c=flowText(data.audioCap?tr("Przytrzymaj, aby mówić","Zum Sprechen halten","Hold to speak"):tr("Kamera nie ma modułu audio","Kamera ohne Audiomodul","Camera has no audio module"));lv_obj_set_style_text_align(c,LV_TEXT_ALIGN_CENTER,0);}
  {auto*b=button(body,data.listening?tr("Wyłącz odsłuch","Hören aus","Stop listening"):tr("Włącz odsłuch","Hören ein","Start listening"),0,214,224,42,true);bind(b,7,0,Screen::Home,Action::Listen);if(!data.audioCap)lv_obj_add_state(b,LV_STATE_DISABLED);}break;
  case Screen::Alerts:title(tr("Powiadomienia","Meldungen","Alerts"));makeBody(188);toggle(&img_bell,tr("Alarmy lokalne","Lokale Alarme","Local alerts"),data.settings.notifications,Notifications,0);for(int i=0;i<data.alertCount;i++){auto*r=row(&img_bell,data.alerts[i],"",50+i*55,64);lv_obj_set_style_border_color(r,col(RED),0);}if(!data.alertCount)flowText(tr("Brak zdarzeń","Keine Ereignisse","No events"));{auto*b=button(body,tr("Wyczyść listę","Liste löschen","Clear list"),0,0,224,64);bind(b,2,0,Screen::Home,Action::ClearAlerts);}footer();break;
- case Screen::Battery:title(tr("Bateria","Batterie","Battery"),Screen::General);makeBody();icon(body,&img_battery,90,11,LIME,450);{char b[32];snprintf(b,sizeof b,data.batteryPct>=0?"%d %%":"—",data.batteryPct);valueLabel=label(body,b,0,68,224,&lv_font_montserrat_32);lv_obj_set_style_text_align(valueLabel,LV_TEXT_ALIGN_CENTER,0);}sensorInfo=label(body,"",12,118,202,&font_ui22);lv_obj_set_style_text_align(sensorInfo,LV_TEXT_ALIGN_CENTER,0);wrapped(body,tr("Szacowany poziom na podstawie napięcia. Stan ładowania jest niedostępny.","Schätzung anhand der Spannung. Ladestatus nicht verfügbar.","Level estimated from voltage. Charging status is unavailable."),9,160,206,&font_body18,MUTED);break;
+ case Screen::Battery:title(tr("Bateria","Batterie","Battery"),Screen::General);makeBody();{
+  auto*c=box(body,0,0,224,196);detailBattery=batteryIcon(c,70,10,86,44,TEXT);
+  valueLabel=label(c,"—",8,65,208,&lv_font_montserrat_32);lv_obj_set_style_text_align(valueLabel,LV_TEXT_ALIGN_CENTER,0);
+  sensorInfo=label(c,"— V",8,108,208,&font_ui22,MUTED);lv_obj_set_style_text_align(sensorInfo,LV_TEXT_ALIGN_CENTER,0);
+  batteryStatus=wrapped(c,batteryStateText(),10,147,204,&font_body18,LIME);lv_obj_set_style_text_align(batteryStatus,LV_TEXT_ALIGN_CENTER,0);
+  auto*h=wrapped(body,tr("Poziom i zasilanie szacowane z napięcia.","Stand und Versorgung aus Spannung geschätzt.","Level and power estimated from voltage."),6,200,212,&font_ui14,MUTED);lv_obj_set_style_text_align(h,LV_TEXT_ALIGN_CENTER,0);
+ }break;
  case Screen::System:title(tr("System","System","System"),Screen::Settings);makeBody();row(&img_info,tr("Urządzenie","Gerät","Device"),"ESP32-S3 · ES3C28P",0);row(&img_info,tr("Oprogramowanie","Software","Firmware"),FIRMWARE_VERSION,45);{char b[32];snprintf(b,sizeof b,"%llu MB",(unsigned long long)(data.sdFree/1024/1024));row(&img_folder,tr("Wolne miejsce na SD","Freier SD-Speicher","Free SD storage"),data.sd?b:tr("Brak karty","Keine Karte","No card"),90);}navRow(&img_battery,tr("Bateria","Batterie","Battery"),Screen::Battery,135);navRow(&img_info,tr("Aktualizacja","Update","Update"),Screen::Update,180);{auto*b=button(body,tr("Reset ustawień","Zurücksetzen","Reset settings"),0,231,224,42);lv_obj_set_style_text_color(b,col(RED),0);bind(b,8);}break;
  case Screen::Pair:title(tr("Parowanie kamery","Kamera koppeln","Pair camera"),Screen::Network);makeBody();flowText(tr("1  Wgraj firmware ESP-CAM.\n2  Ustaw token i hasło.\n3  Direct: sieć kamery.\n    IP: 192.168.4.1\n4  Router: wspólne Wi-Fi\n    i adres IP kamery.\n5  Naciśnij Połącz.","1  Kamera-Firmware laden.\n2  Token/Passwort abgleichen.\n3  Direkt: Kamera-WLAN.\n    IP: 192.168.4.1\n4  Router: gemeinsames WLAN\n    und Kamera-IP.\n5  Verbinden drücken.","1  Flash camera firmware.\n2  Match token and password.\n3  Direct: camera Wi-Fi.\n    IP: 192.168.4.1\n4  Router: same Wi-Fi\n    and camera IP address.\n5  Tap Connect."),&font_ui20,TEXT);break;
  }
- notice=label(root,"",7,294,226,&font_ui12,RED);lv_obj_add_flag(notice,LV_OBJ_FLAG_HIDDEN);
+ notice=label(root,"",7,294,226,&font_ui12,RED);lv_obj_add_flag(notice,LV_OBJ_FLAG_HIDDEN);lv_obj_update_layout(root);
 }
 void begin(Dispatch d){send=d;imageBuf=(lv_color_t*)lv_mem_alloc(Video::bytes);if(imageBuf){memset(imageBuf,0,Video::bytes);liveImage.data=(const uint8_t*)imageBuf;}for(auto&h:data.history)for(float&v:h)v=NAN;show(Screen::Home);}
 Screen current(){return page;}
@@ -366,14 +413,17 @@ void update(const AppState&s){
  if(!data.camera&&!data.playing)frameReady=false;
  if(page==Screen::Live)refreshLive();
 
+ if(dateLabel)lv_label_set_text(dateLabel,data.dateText);updateBatteryIcon(topBattery,page==Screen::Live?0xffffff:TEXT);updateBatteryIcon(detailBattery,TEXT);
  if(clockLabel)lv_label_set_text(clockLabel,data.timeText);if(batteryLabel){char b[12];if(data.batteryPct>=0)snprintf(b,sizeof b,"%d%%",data.batteryPct);else snprintf(b,sizeof b,"—");lv_label_set_text(batteryLabel,b);}if(wifiIcon)lv_obj_set_style_img_recolor(wifiIcon,col(page==Screen::Live?0xffffff:data.wifi?TEXT:MUTED),0);
- if(page==Screen::Sensors){for(int m=0;m<6;m++){bool valid=metricValid(data,m)&&isfinite(metricValue(data,m));char reading[32];sensorReading(m,reading,sizeof reading);lv_label_set_text(sensorValues[m],reading);lv_obj_set_style_text_font(sensorValues[m],lv_txt_get_width(reading,strlen(reading),&lv_font_montserrat_28,0,LV_TEXT_FLAG_NONE)>88?&font_ui22:&lv_font_montserrat_28,0);lv_obj_set_style_bg_color(sensorStates[m],col(valid?LIME:MUTED),0);}}
+ if(page==Screen::Sensors)for(int m=0;m<6;m++)refreshSensor(m);
 
  if(page==Screen::Metric){char n[40];float v=metricValue(data,metric);if(metricValid(data,metric)&&isfinite(v))snprintf(n,sizeof n,metric==0||metric==4?"%.1f %s":"%.0f %s",v,unit(metric));else snprintf(n,sizeof n,"— %s",unit(metric));lv_label_set_text(valueLabel,n);lv_label_set_text(onlineLabel,metricValid(data,metric)?tr("● Połączony","● Verbunden","● Connected"):tr("○ Brak danych","○ Keine Werte","○ No data"));
  float lo=INFINITY,hi=-INFINITY;for(int i=0;i<HISTORY_COUNT;i++){float x=data.history[metric][i];series->y_points[i]=isfinite(x)?(lv_coord_t)(x*10):LV_CHART_POINT_NONE;if(isfinite(x)){lo=std::min(lo,x);hi=std::max(hi,x);}}
  if(isfinite(lo)){float margin=std::max(1.0f,(hi-lo)*.15f);lv_chart_set_range(chart,LV_CHART_AXIS_PRIMARY_Y,(lo-margin)*10,(hi+margin)*10);snprintf(n,sizeof n,"Min %.1f %s",lo,unit(metric));lv_label_set_text(minLabel,n);snprintf(n,sizeof n,"Max %.1f %s",hi,unit(metric));lv_label_set_text(maxLabel,n);}lv_chart_refresh(chart);}
  if(page==Screen::Scan&&sensorInfo){char line[220]={};snprintf(line,sizeof line,"%s\n",data.scanRunning?tr("Skanowanie...","Scannen...","Scanning..."):"I²C:");for(int a=8;a<120;a++)if(data.found[a]){char entry[48];snprintf(entry,sizeof entry,"0x%02X %s\n",a,a==0x38?"FT6336G":a==0x18?"ES8311":a==0x62?"SCD4x":a==0x76||a==0x77?"BME68x":"?");if(strlen(line)+strlen(entry)<sizeof line)strcat(line,entry);}lv_label_set_text(sensorInfo,line);}
- if(page==Screen::Battery){char b[40];snprintf(b,sizeof b,"%.3f V",data.batteryV);lv_label_set_text(sensorInfo,b);}
+ if(page==Screen::Battery){char b[40];if(data.batteryPct>=0)snprintf(b,sizeof b,"%d%%",data.batteryPct);else snprintf(b,sizeof b,"—");lv_label_set_text(valueLabel,b);
+  if(data.batteryPct>=0&&isfinite(data.batteryV))snprintf(b,sizeof b,"%.3f V",data.batteryV);else snprintf(b,sizeof b,"— V");lv_label_set_text(sensorInfo,b);lv_label_set_text(batteryStatus,batteryStateText());
+ }
  if(page==Screen::Update&&otaProgress){bool working=Ota::installing(data.ota.state);unsigned p=std::min(100u,unsigned(data.ota.progress));lv_bar_set_value(otaProgress,p,LV_ANIM_OFF);lv_label_set_text_fmt(otaPercent,"%u%%",p);
   for(auto*o:{otaProgress,otaPercent})if(working)lv_obj_clear_flag(o,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(o,LV_OBJ_FLAG_HIDDEN);
   if(working||data.ota.state==Ota::State::Checking)lv_obj_add_state(otaCheckButton,LV_STATE_DISABLED);else lv_obj_clear_state(otaCheckButton,LV_STATE_DISABLED);

@@ -22,9 +22,9 @@ def metadata(app, version):
     return dict(schema=1, target=TARGET, version=version, size=len(app),
                 sha256=hashlib.sha256(app).hexdigest(),
                 url=f'https://github.com/{REPOSITORY}/releases/download/v{version}/firmware.bin',
-                notes={'pl':'Wyraźniejsze jasne karty, osobne Audio i Kamera, duże kafelki sensorów, pełnoekranowy podgląd z przyciskami na obrazie i nowe ikony.',
-                       'de':'Deutlichere helle Karten, separate Audio- und Kamera-Einstellungen, große Sensorkacheln, Vollbildkamera mit Bedienelementen im Bild und neue Symbole.',
-                       'en':'Stronger light-theme cards, separate Audio and Camera settings, large sensor tiles, full-screen video with overlay controls and refreshed icons.'})
+                notes={'pl':'Zgodne procenty baterii, piorun i animacja zasilania szacowanego z napięcia. Większa data i ikony na stronie głównej. Sześć sensorów na jednym ekranie z alarmami i nową ikoną pogo.',
+                       'de':'Einheitliche Akkuwerte, Blitz und Ladeanimation aus Spannung geschätzt. Größeres Datum und Symbole auf der Startseite. Sechs Sensorwerte mit Alarmen auf einer Seite und neues Pogo-Symbol.',
+                       'en':'Consistent battery percentages, voltage-estimated power bolt and charge animation. Larger home date and icons. Six sensor readings with alerts on one screen and a refreshed pogo icon.'})
 
 
 def main():
@@ -39,45 +39,54 @@ def main():
     (out/'ota.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     for name in ('PILOT_LCD_TEST_APP.bin','PILOT_LCD_TEST_FULL.bin'):
         shutil.copy2(ROOT/'firmware'/name,out/name)
-    (out/'notes.md').write_text(f'''ESP Remote v{version}\n\n# V1.3.8 — sensory, kamera i osobne audio
+    (out/'notes.md').write_text(f'''ESP Remote v{version}\n\n# V1.3.9 — bateria i czytelne sensory
 
-Jasny motyw ma ciemniejsze obramowania kart i większą różnicę między kartą a tłem.
-Ustawienia zawierają osobne strony Kamera i Audio. Audio grupuje głośność, odsłuch,
-alarm dźwięku i mówienie; Kamera grupuje obraz, tryb nocny, ruch i nagrania.
+Procent w nagłówku i na stronie baterii pochodzi z tej samej próbki AppState.
+Oba wskazania aktualizują się na bieżąco, także po zmianie poziomu zasilania.
+Poprzednio duży procent odświeżał się dopiero po ponownym wejściu na stronę.
 
-Sensory mają sześć dużych kafelków w dwóch kolumnach: nazwa, jednostka, aktualna
-wartość i wskaźnik dostępności. Dotknięcie kafelka otwiera wykres. Dalsze pomiary
-i ustawienia są dostępne przez przewijanie; przycisk plus otwiera wyszukiwanie.
-Brak lub nieaktualne dane pokazują kreskę zamiast starego odczytu.
+Pomiar ADC co 500 ms używa mediany 16 próbek i filtrowania napięcia. Zachowano
+krzywą procentową dla baterii; próg 4,1 V nie wymusza sztucznego wyniku 100%.
 
-Podgląd kamery wypełnia ekran 240 × 320 bez nagłówka Kamera 1. Przyciski na obrazie
-obsługują powrót, cały kadr/powiększenie, głośność, ustawienia kamery, przytrzymanie
-mikrofonu, zdjęcie, nagrywanie i odsłuch. Dotknięcie wolnej części obrazu chowa lub
-pokazuje przyciski. Przełączenie kadru nie zmienia pliku zdjęcia ani nagrania.
-Cały kadr zachowuje obraz 4:3 i czarne pasy; powiększenie przycina boki.
+| Zaobserwowane napięcie | Wskazanie |
+|---|---|
+| Wzrost o co najmniej 30 mV w oknie 2 s, poniżej 4,1 V | Piorun i animowane zielone segmenty; ładowanie szacowane |
+| Co najmniej 4,1 V przez 2 s | Piorun pozostaje, segmenty pokazują poziom bez animacji |
+| Spadek poniżej 4,06 V o co najmniej 65 mV od maksimum przez 2 s | Powrót do wskaźnika baterii bez pioruna |
+| Niewielkie wahania przy 4,1 V | Histereza utrzymuje ikonę zasilania bez migotania |
+| Niepoprawny pomiar ADC | Kreska zamiast procentu i napięcia |
 
-Bufory obrazu 320 × 240 używają PSRAM. Brak obrazu jest sygnalizowany, a funkcje
-wymagające kamery, audio lub SD są blokowane, gdy te zasoby są niedostępne.
-Przyciski mają pola dotykowe co najmniej 44 × 44 px.
+Wykrywanie opiera się na obserwacji użytkownika dotyczącej tej płytki. Samo
+napięcie nie potwierdza obecności kabla, prądu ładowania ani zakończenia ładowania.
+Na stronie znajduje się informacja, że poziom i zasilanie są szacowane. Bateria
+o wysokim napięciu po odłączeniu kabla może przez pewien czas zachować piorun.
 
-Ikony w całym interfejsie pochodzą z jednej wersji Lucide. Źródło i licencja są
-w assets/LUCIDE_SOURCE.json i assets/Lucide-LICENSE.txt. Ciemna strona główna ma
-zachowany układ, tekst i kolory; zmieniono na niej wyłącznie ikonki.
+Strona baterii mieści poziom, napięcie, ikonę i stan na jednym ekranie, również
+po niemiecku. W obu motywach ma zielone segmenty; niski poziom bez zasilania
+jest oznaczony czerwienią. Animacja i piorun są także widoczne w nagłówkach.
 
-![Rzeczywisty renderer LVGL; przykładowe pomiary i obraz testowy](DASHBOARD_CAMERA_V1_3_8.png)
+Strona główna ma większą godzinę, datę 18 px oraz większe Wi-Fi i baterię.
+Data pochodzi z NTP; bez czasu sieciowego widoczny jest placeholder. Wi-Fi ma
+grubszy kontur. Ikona sensorów przedstawia moduł z kontaktami pogo — to oryginalny
+rysunek zapisany jako SVG i zasób firmware, bez zależności od karty SD.
 
-Sprawdzono 150 ekranów PL/DE/EN w obu motywach, duże cele dotykowe, przewijanie,
-klawiaturę, aktualizacje odczytów, nawigację do wykresu, rozdział ustawień audio,
-przyciski i gesty podglądu, zapis głośności oraz działanie OTA w rendererze LVGL.
-Test geometrii sprawdza zachowanie proporcji, przycięcie oraz pokrycie całego
-bufora podczas dekodowania QVGA i VGA. Testy OTA, TLS, motywu, LCD i pakowania
-pozostają w procesie wydania. Testy na fizycznym pilocie pozostają do wykonania.
+Ekran sensorów pokazuje wszystkie sześć pomiarów w dwóch kolumnach i trzech
+wierszach, bez przewijania. Kafelki 108 × 76 px zawierają duże wartości, nazwy,
+jednostki oraz stany OK / Alarm / Brak. Kolor alarmu reaguje na ustawione progi;
+nieaktualny pomiar jest zastępowany kreską. Dotknięcie kafelka otwiera wykres,
+a koło zębate prowadzi do ustawień i skanowania I²C.
 
-Aktualizacja OTA zachowuje konfigurację i dane SD. Po wcześniejszej instalacji
-merged, bez późniejszego przełączenia slotu OTA, plik firmware.bin można wgrać
-przez USB pod 0x10000 bez Erase all. Po udanym OTA użyj ekranu aktualizacji;
-sam zapis pod 0x10000 nie wybiera aktywnej partycji. Obraz firmware-merged.bin
-pod 0x0 przeznaczono do czystej instalacji i usuwa ustawienia.
+![Rzeczywisty renderer LVGL; przykładowe dane](BATTERY_SENSORS_V1_3_9.png)
+
+Testy obejmują krzywą procentową, szum, okno wzrostu, opóźnienia, histerezę,
+odłączenie, błędne napięcie i przepełnienie licznika czasu. Renderer PL/DE/EN
+sprawdza zgodność obu procentów, 100%, animację i nieruchomy piorun, widoczność
+wszystkich pomiarów, alarmy, brak danych oraz dotyk. Dotychczasowe testy kamery,
+OTA, TLS, klawiatury i obu motywów pozostają w procesie wydania.
+
+Ustawienia i schemat NVS nie zmieniły się. OTA zachowuje konfigurację oraz SD.
+Testy na fizycznej płytce pozostają do wykonania, zwłaszcza zachowanie wskaźnika
+przy podłączaniu i odłączaniu USB w różnych stanach naładowania.
 ''')
     checks=[]
     for path in sorted(out.iterdir()):

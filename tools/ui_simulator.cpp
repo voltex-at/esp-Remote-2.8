@@ -25,6 +25,7 @@ static void checkTargets(lv_obj_t*p){
 }
 static void command(Action a,int value,const char*t){if(capture){assert(sentCount<32);sent[sentCount]={a,value,{0}};snprintf(sent[sentCount++].text,128,"%s",t?t:"");}}
 static lv_obj_t*findLabel(lv_obj_t*parent,const char*text){if(lv_obj_check_type(parent,&lv_label_class)&&!strcmp(lv_label_get_text(parent),text))return parent;for(uint32_t i=0;i<lv_obj_get_child_cnt(parent);i++)if(auto*o=findLabel(lv_obj_get_child(parent,i),text))return o;return nullptr;}
+static int countLabel(lv_obj_t*p,const char*text){int count=lv_obj_check_type(p,&lv_label_class)&&!strcmp(lv_label_get_text(p),text);for(uint32_t i=0;i<lv_obj_get_child_cnt(p);i++)count+=countLabel(lv_obj_get_child(p,i),text);return count;}
 static lv_obj_t*findType(lv_obj_t*parent,const lv_obj_class_t*type){if(lv_obj_check_type(parent,type))return parent;for(uint32_t i=0;i<lv_obj_get_child_cnt(parent);i++)if(auto*o=findType(lv_obj_get_child(parent,i),type))return o;return nullptr;}
 static void dumpLabels(lv_obj_t*p){if(lv_obj_check_type(p,&lv_label_class))fprintf(stderr,"Label: %s\n",lv_label_get_text(p));for(uint32_t i=0;i<lv_obj_get_child_cnt(p);i++)dumpLabels(lv_obj_get_child(p,i));}
 static void click(const char*text){lv_obj_update_layout(lv_scr_act());auto*l=findLabel(lv_scr_act(),text);if(!l)fprintf(stderr,"Missing UI target: %s\n",text);assert(l);lv_event_send(lv_obj_get_parent(l),LV_EVENT_CLICKED,nullptr);}
@@ -36,7 +37,7 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  AppState s;assert(!s.settings.ssid[0]&&!s.settings.password[0]&&!s.settings.pairToken[0]);Ui::show(Screen::Network);Ui::update(s);lv_obj_update_layout(lv_scr_act());assert(findLabel(lv_scr_act(),"Nie ustawiono"));
  s.batteryPct=80;s.batteryV=3.98;s.wifi=true;s.rssi=-54;s.wifiLink=WifiLinkState::Connected;strcpy(s.connectedSsid,"ESP32-BABY-CAM");strcpy(s.settings.ssid,s.connectedSsid);s.wifiScan=WifiScanState::Done;s.wifiScanGeneration=1;s.networkCount=5;
  const char*ssids[]={"ESP32-BABY-CAM","Home-24G","Guest","Office-Enterprise","A-very-long-SSID-with-32-letters"};for(int i=0;i<5;i++){snprintf(s.networks[i].ssid,33,"%s",ssids[i]);s.networks[i].rssi=-42-i*10;s.networks[i].security=i==2?WifiSecurity::Open:i==3?WifiSecurity::Unsupported:WifiSecurity::Wpa2;}
- s.bmeOnline=s.scdOnline=s.bmeFresh=s.scdFresh=true;s.temperature=23.4;s.humidity=54;s.co2=742;s.iaq=42;s.pressure=1013.2;s.eco2=608;s.iaqAccuracy=2;s.historyCount=60;s.sd=true;s.sdFree=12ULL*1024*1024*1024;strcpy(s.timeText,"14:26");strcpy(s.ip,"192.168.4.2");strcpy(s.message,"");
+ s.bmeOnline=s.scdOnline=s.bmeFresh=s.scdFresh=true;s.temperature=23.4;s.humidity=54;s.co2=742;s.iaq=42;s.pressure=1013.2;s.eco2=608;s.iaqAccuracy=2;s.historyCount=60;s.sd=true;s.sdFree=12ULL*1024*1024*1024;strcpy(s.timeText,"14:26");strcpy(s.dateText,"12.10.2026");strcpy(s.ip,"192.168.4.2");strcpy(s.message,"");
  for(int m=0;m<6;m++)for(int i=0;i<60;i++)s.history[m][i]=metricValue(s,m)+sin(i*.34f)*(m==2?110:m==1?7:m==3?15:2);
  Ui::update(s);const Screen screens[]={Screen::Home,Screen::Sensors,Screen::Metric,Screen::Settings,Screen::General,Screen::Display,Screen::CameraSettings,Screen::Network,Screen::Scan,Screen::Battery,Screen::System,Screen::Alerts,Screen::Cameras,Screen::Audio,Screen::Live,Screen::Limits,Screen::SensorSettings,Screen::Recordings,Screen::Pair,Screen::WifiNetworks,Screen::Languages,Screen::Colors,Screen::Appearance,Screen::Update,Screen::AudioSettings};
  for(int lang=0;lang<3;lang++){s.settings.language=lang;Ui::update(s);for(unsigned i=0;i<sizeof screens/sizeof screens[0];i++){Ui::show(screens[i],0);Ui::update(s);lv_tick_inc(30);lv_timer_handler();char name[512];snprintf(name,sizeof name,"%s/ui_%d_%02d.ppm",argv[1],lang,i);save(name);}
@@ -169,9 +170,29 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  Ui::show(Screen::WifiNetworks);click("Home-24G");input=findType(lv_scr_act(),&lv_textarea_class);kb=findType(lv_scr_act(),&lv_keyboard_class);lv_textarea_set_text(input,"Example-Password");pressKey(kb,"1#");pressKey(kb,"#+");s.theme=ThemeMode::Light;Ui::update(s);input=findType(lv_scr_act(),&lv_textarea_class);kb=findType(lv_scr_act(),&lv_keyboard_class);assert(input&&kb&&!strcmp(lv_textarea_get_text(input),"Example-Password")&&lv_textarea_get_password_mode(input)&&findLabel(lv_scr_act(),"Home-24G"));pressKey(kb,"!");sentCount=0;pressKey(kb,LV_SYMBOL_OK);assert(sentCount==4&&sent[1].value==WifiSsid&&!strcmp(sent[1].text,"Home-24G")&&!strcmp(sent[2].text,"Example-Password!"));Ui::update(s);
  Ui::show(Screen::Metric);s.theme=ThemeMode::Dark;Ui::update(s);assert(Ui::current()==Screen::Metric);s.theme=ThemeMode::Light;Ui::update(s);assert(Ui::current()==Screen::Metric);Ui::show(Screen::Scan);s.theme=ThemeMode::Dark;Ui::update(s);assert(Ui::current()==Screen::Scan);capture=false;
  puts("Themes: real touch, no duplicate save, immediate repaint, back paths and preserved Wi-Fi draft/context OK.");
+ // Battery labels must agree after every update, in all locales and themes.
+ capture=false;
+ for(int theme=0;theme<2;theme++)for(int lang=0;lang<3;lang++){
+  s.theme=ThemeSettings::normalize(theme);s.settings.language=lang;s.batteryPct=87;s.batteryV=4.106f;s.batteryPower=Battery::Power::Battery;Ui::update(s);Ui::show(Screen::Battery);Ui::update(s);
+  assert(countLabel(lv_scr_act(),"87%")==2);assert(lv_obj_has_flag(findImage(lv_scr_act(),&img_bolt),LV_OBJ_FLAG_HIDDEN));
+  s.batteryPct=90;s.batteryV=4.120f;Ui::update(s);assert(countLabel(lv_scr_act(),"90%")==2&&!findLabel(lv_scr_act(),"87%"));
+  s.batteryPct=100;Ui::update(s);assert(countLabel(lv_scr_act(),"100%")==2);auto*small=findLabel(lv_scr_act(),"100%");assert(lv_txt_get_width("100%",4,lv_obj_get_style_text_font(small,0),0,LV_TEXT_FLAG_NONE)<=lv_obj_get_width(small));
+  s.batteryV=4.02f;s.batteryPct=Battery::percentage(s.batteryV);s.batteryPower=Battery::Power::Charging;Ui::update(s);assert(!lv_obj_has_flag(findImage(lv_scr_act(),&img_bolt),LV_OBJ_FLAG_HIDDEN));
+  auto*a=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);assert(a);lv_tick_inc(450);Ui::update(s);auto*b=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);assert(b&&a->header.w==240&&b->header.w==240&&memcmp(a->data,b->data,240*320*sizeof(lv_color_t)));lv_snapshot_free(a);lv_snapshot_free(b);
+  char n[512];snprintf(n,sizeof n,"%s/battery_charging_%d_%d.ppm",argv[1],theme,lang);save(n);
+  s.batteryPower=Battery::Power::External;s.batteryV=4.12f;s.batteryPct=Battery::percentage(s.batteryV);Ui::update(s);a=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);lv_tick_inc(450);Ui::update(s);b=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);assert(a&&b&&a->header.w==240&&b->header.w==240&&!memcmp(a->data,b->data,240*320*sizeof(lv_color_t)));lv_snapshot_free(a);lv_snapshot_free(b);
+  snprintf(n,sizeof n,"%s/battery_external_%d_%d.ppm",argv[1],theme,lang);save(n);lv_obj_update_layout(lv_scr_act());if(scrollBody()&&lv_obj_get_scroll_bottom(scrollBody())>0)fprintf(stderr,"Battery overflow theme=%d lang=%d scroll=%d\n",theme,lang,int(lv_obj_get_scroll_bottom(scrollBody())));assert(scrollBody()&&lv_obj_get_scroll_bottom(scrollBody())<=0);
+  s.batteryPct=-1;s.batteryV=NAN;s.batteryPower=Battery::Power::Battery;Ui::update(s);assert(countLabel(lv_scr_act(),"—")==2&&findLabel(lv_scr_act(),"— V"));
+  s.batteryPct=80;s.batteryV=3.98f;Ui::update(s);Ui::show(Screen::Home);Ui::update(s);assert(findLabel(lv_scr_act(),"12.10.2026"));
+  Ui::show(Screen::Sensors);Ui::update(s);lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());
+  for(const char*v:{"23.4","54","742","42","1013","608"}){auto*l=findLabel(lv_scr_act(),v);assert(l);lv_area_t area;lv_obj_get_coords(l,&area);assert(area.y1>=72&&area.y2<320);}
+  s.co2=2000;Ui::update(s);assert(findLabel(lv_scr_act(),lang==2?"Alert":"Alarm"));s.co2=742;s.bmeFresh=s.scdFresh=false;Ui::update(s);assert(countLabel(lv_scr_act(),"—")==6);s.bmeFresh=s.scdFresh=true;Ui::update(s);
+ }
+ s.theme=ThemeMode::Dark;s.settings.language=0;s.batteryPct=80;s.batteryV=3.98f;s.batteryPower=Battery::Power::Battery;Ui::update(s);
+ puts("Battery UI: synchronized percentages, 100% width, animated charging, static powered bolt, invalid values and one-page diagnostics PL/DE/EN. All six sensor readings visible; alerts/offline update live.");
  // Dashboard, independent audio settings and the real full-screen viewer.
  capture=true;s.settings.language=0;s.theme=ThemeMode::Dark;s.camera=s.audioCap=s.motionCap=s.sd=true;s.playing=s.recording=s.listening=false;Ui::update(s);
- Ui::show(Screen::Sensors);sentCount=0;tap(60,164);Ui::update(s);assert(Ui::current()==Screen::Metric&&findLabel(lv_scr_act(),"Temperatura"));
+ Ui::show(Screen::Sensors);sentCount=0;tap(60,110);Ui::update(s);assert(Ui::current()==Screen::Metric&&findLabel(lv_scr_act(),"Temperatura"));
  Ui::show(Screen::CameraSettings);assert(!findLabel(lv_scr_act(),"Alarm dźwięku")&&!findLabel(lv_scr_act(),"Głośność"));Ui::show(Screen::AudioSettings);assert(findLabel(lv_scr_act(),"Alarm dźwięku")&&findLabel(lv_scr_act(),"Głośność"));
  static uint16_t fixture[Video::pixels];for(int y=0;y<Video::height;y++)for(int x=0;x<Video::width;x++){uint32_t c=x<48?0xb9364b:x>=272?0x386daa:((x/32+y/24)%2?0x8ba79a:0xd1dfce);fixture[y*Video::width+x]=lv_color_hex(c).full;}
  for(int theme=0;theme<2;theme++){s.theme=ThemeSettings::normalize(theme);Ui::update(s);Ui::show(Screen::Live);Ui::frame(fixture);Ui::update(s);lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());assert(!findLabel(lv_scr_act(),"Kamera 1"));

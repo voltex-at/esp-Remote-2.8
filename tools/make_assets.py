@@ -9,7 +9,7 @@ ASSET=ROOT/'assets';ASSET.mkdir(exist_ok=True)
 # SVG icons are vendored from the pinned Lucide revision in assets/LUCIDE_SOURCE.json.
 # The complete ISC/Feather license is retained in assets/Lucide-LICENSE.txt.
 import json
-names=json.loads((ASSET/'LUCIDE_SOURCE.json').read_text())['icons']
+manifest=json.loads((ASSET/'LUCIDE_SOURCE.json').read_text());names=[*manifest['icons'],*manifest.get('custom_icons',{})]
 def svg(body,w=24,h=24):return f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">{body}</svg>'
 items=[]
 for name in names:

@@ -20,18 +20,18 @@ for lang,key in enumerate(('pl','de','en')):
     actual=Image.open(out/f'ui_{lang}_00.png').convert('RGB')
     if ImageChops.difference(reference,actual).getbbox() is not None:
         raise AssertionError(f'Home screen changed in {key}; must remain pixel-identical')
-print('Home screen PL/DE/EN: pixel-identical to V1.3.8 icon reference.')
+print('Home screen PL/DE/EN: pixel-identical to V1.3.9 home reference.')
 print(out)
 
 # A shareable proof from actual firmware objects, with explicit demo-data label.
 preview=Image.new('RGB',(1008,752),'#16212e');draw=ImageDraw.Draw(preview)
 font=ImageFont.truetype(str(root/'assets/MontserratMedium.ttf'),18)
-tiles=(('light_ui_0_03.png','Jasne ustawienia'),('light_ui_0_01.png','Jasne sensory'),
-       ('ui_0_01.png','Ciemne sensory'),('light_ui_0_24.png','Audio'),
-       ('camera_cover_1.png','Kamera · powiększenie'),('camera_whole_1.png','Kamera · cały kadr'),
-       ('camera_volume_1.png','Głośność na obrazie'),('light_ui_0_06.png','Ustawienia kamery'))
+tiles=(('ui_0_00.png','Strona główna · ciemna'),('light_ui_0_00.png','Strona główna · jasna'),
+       ('ui_0_01.png','Sześć sensorów'),('light_ui_0_01.png','Sensory · jasny motyw'),
+       ('battery_charging_0_0.png','Ładowanie · animacja'),('battery_external_0_0.png','Zasilanie · bez animacji'),
+       ('battery_charging_1_1.png','Bateria · DE / jasny'),('battery_external_1_2.png','Bateria · EN / jasny'))
 for i,(name,caption) in enumerate(tiles):
     x=12+(i%4)*252;y=12+(i//4)*352
     draw.text((x,y),caption,font=font,fill='#f7f9fc');preview.paste(Image.open(out/name),(x,y+26))
-draw.text((12,721),'LVGL 240 × 320 · V1.3.8 · dane i obraz wzorcowy',font=font,fill='#b2becb')
-preview.save(root/'docs/DASHBOARD_CAMERA_V1_3_8.png')
+draw.text((12,721),'LVGL 240 × 320 · V1.3.9 · przykładowe dane',font=font,fill='#b2becb')
+preview.save(root/'docs/BATTERY_SENSORS_V1_3_9.png')

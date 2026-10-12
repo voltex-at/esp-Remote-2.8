@@ -3,7 +3,6 @@
   "commit": "440a1e1dfb1e712505308da46bead3c28b1f1398",
   "icons": {
     "camera": "camera",
-    "sensor": "radio",
     "settings": "settings",
     "link": "link-2",
     "mic": "mic",
@@ -39,6 +38,13 @@
     "close": "x",
     "eye": "eye",
     "eye_off": "eye-off",
-    "right": "chevron-right"
+    "right": "chevron-right",
+    "bolt": "zap"
+  },
+  "custom_icons": {
+    "sensor": "Original outline of a pogo sensor module, PCB and four contacts."
+  },
+  "modified_icons": {
+    "wifi": "Lucide wifi with a 2.4 px stroke for a clearer status indicator."
   }
 }

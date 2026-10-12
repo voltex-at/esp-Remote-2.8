@@ -5,6 +5,11 @@ Wi-Fi z wyszukiwaniem sieci i klawiaturą hasła, języki polski/niemiecki/angie
 sensory BME688/BSEC2 i SCD41 przez I²C/pogo, ESP-CAM przez router lub Direct,
 karta SD przeznaczona na nagrania i logi. Nie zmieniono schematu ustawień V1.2.
 
+V1.3.9 synchronizuje procent baterii w nagłówku i diagnostyce. Dodaje piorun
+oraz animację przy zasilaniu szacowanym z napięcia, większą datę i ikony na stronie
+głównej. Wszystkie sześć pomiarów mieści się na jednej stronie, z alarmami i
+czytelną ikoną pogo. [Opis i podgląd](docs/BATTERY_SENSORS_V1_3_9.md).
+
 V1.3.8 wzmacnia jasne obramowania, rozdziela ustawienia **Kamera / Audio**,
 przebudowuje sensory na duże kafelki i dodaje podgląd kamery na całym ekranie
 z przyciskami na obrazie. Nowe ikony w całym interfejsie; układ strony głównej
@@ -60,5 +65,5 @@ Istniejące wydania nie są nadpisywane. Każdy commit nie oznacza nowego wydani
 Pełna dokumentacja sprzętu i funkcji: [README_PL.md](README_PL.md).
 OTA: [docs/OTA.md](docs/OTA.md). Diagnostyka LCD: [docs/LCD_FIX_V1_2.md](docs/LCD_FIX_V1_2.md).
 
-V1.3.8 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
+V1.3.9 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
 działania LCD, sensorów, radia ani aktualizacji przy zaniku zasilania.

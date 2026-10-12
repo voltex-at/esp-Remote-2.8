@@ -4,6 +4,7 @@
 #include <math.h>
 #include "ota_policy.h"
 #include "theme_settings.h"
+#include "battery_monitor.h"
 enum class Screen:uint8_t { Home,Cameras,Live,Sensors,Metric,Settings,General,Display,Network,Pair,Alerts,Audio,CameraSettings,SensorSettings,Scan,Recordings,Battery,System,Limits,WifiNetworks,Languages,Update,Colors,Appearance,AudioSettings };
 enum class Action:uint8_t { Setting,Scan,Connect,Snapshot,Record,Listen,Talk,CameraControl,LoadFiles,Play,Reset,ClearAlerts,Reboot,WifiScan,OtaCheck,OtaInstall };
 enum class WifiScanState:uint8_t { Idle,Scanning,Done,Failed };
@@ -31,6 +32,7 @@ struct AppState {
  float temperature=NAN,humidity=NAN,co2=NAN,iaq=NAN,pressure=NAN,eco2=NAN,voc=NAN;
  float scdTemperature=NAN,scdHumidity=NAN;
  float batteryV=0,audioRms=0;
+ Battery::Power batteryPower=Battery::Power::Battery;
  int batteryPct=-1,rssi=-127,bsecStatus=0,bmeStatus=0;
  uint8_t iaqAccuracy=0;
  bool bmeOnline=false,scdOnline=false,bmeFresh=false,scdFresh=false,wifi=false,sd=false;
@@ -43,7 +45,7 @@ struct AppState {
  float history[METRIC_COUNT][HISTORY_COUNT];
  uint32_t clipStarted=0;
  char clipPath[96]={};
- char timeText[8]="--:--",ip[20]="0.0.0.0",message[120]="Gotowy",cameraName[32]="Kamera 1";
+ char timeText[8]="--:--",dateText[16]="--.--.----",ip[20]="0.0.0.0",message[120]="Gotowy",cameraName[32]="Kamera 1";
  char files[FILE_COUNT][96]={},alerts[ALERT_COUNT][96]={};
  uint8_t fileCount=0,alertCount=0;
  WifiScanState wifiScan=WifiScanState::Idle;
