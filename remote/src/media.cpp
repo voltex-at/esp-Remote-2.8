@@ -12,14 +12,15 @@ static bool playPending=false;static uint32_t playBytes=0,playStamp=0;
 static File clip,playFile;static bool playing=false;static uint32_t clipStart=0,playStart=0,nextPlay=0,lastFrame=0,lastStatus=0,frames=0;
 static bool jpgBlock(int16_t x,int16_t y,uint16_t w,uint16_t h,uint16_t* src){
  for(int j=0;j<h;j++)for(int i=0;i<w;i++){
- int dx=(x+i)*224/imageW,dy=(y+j)*168/imageH;
- if(dx<224&&dy<168)decoded[dy*224+dx]=src[j*w+i];
+ int dx,dy;
+ if(Video::decodedPixel(x+i,y+j,imageW,imageH,dx,dy))decoded[dy*Video::width+dx]=src[j*w+i];
  }return true;
 }
 static bool render(const uint8_t*data,size_t len){
- if(len<4||TJpgDec.getJpgSize(&imageW,&imageH,data,len)!=JDR_OK||imageW>640||imageH>480)return false;
+ if(len<4||TJpgDec.getJpgSize(&imageW,&imageH,data,len)!=JDR_OK||!imageW||!imageH||imageW>640||imageH>480)return false;
+ memset(decoded,0,Video::bytes);
  if(TJpgDec.drawJpg(0,0,data,len)!=JDR_OK)return false;
- {Guard g(frameMutex);memcpy(videoPixels,decoded,224*168*2);videoDirty=true;}return true;
+ {Guard g(frameMutex);memcpy(videoPixels,decoded,Video::bytes);videoDirty=true;}return true;
 }
 static bool httpBegin(HTTPClient&http,WiFiClient&client,const Settings&s,const char*path){
  http.setConnectTimeout(700);http.setTimeout(900);if(!http.begin(client,String("http://")+s.cameraHost+path))return false;http.addHeader("X-Pair-Token",s.pairToken);return true;
@@ -71,7 +72,7 @@ static void playbackStep(){
  if(millis()-playStart>=playStamp){render(jpg,playBytes);playPending=false;}
 }
 void task(void*){
- jpg=(uint8_t*)ps_malloc(MAX_JPEG_BYTES);decoded=(uint16_t*)ps_malloc(224*168*2);
+ jpg=(uint8_t*)ps_malloc(MAX_JPEG_BYTES);decoded=(uint16_t*)ps_malloc(Video::bytes);
  if(!jpg||!decoded){message("Brak PSRAM dla obrazu kamery");vTaskDelete(nullptr);return;}
  TJpgDec.setJpgScale(1);TJpgDec.setSwapBytes(false);TJpgDec.setCallback(jpgBlock);
  for(;;){

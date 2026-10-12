@@ -6,6 +6,7 @@
 #include <Preferences.h>
 #include "app_state.h"
 #include "board_config.h"
+#include "video_geometry.h"
 extern AppState state;
 extern SemaphoreHandle_t stateMutex,i2cMutex,sdMutex,frameMutex;
 extern QueueHandle_t commands,mediaCommands;

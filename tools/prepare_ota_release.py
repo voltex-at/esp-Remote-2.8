@@ -22,9 +22,9 @@ def metadata(app, version):
     return dict(schema=1, target=TARGET, version=version, size=len(app),
                 sha256=hashlib.sha256(app).hexdigest(),
                 url=f'https://github.com/{REPOSITORY}/releases/download/v{version}/firmware.bin',
-                notes={'pl':'Motywy Jasny / Ciemny w Ustawienia → Wygląd. Wybór zapisuje się po restarcie. Jasna wersja wszystkich ekranów i klawiatury.',
-                       'de':'Hell / Dunkel unter Einstellungen → Design. Auswahl bleibt nach Neustart erhalten. Helle Version aller Ansichten und der Tastatur.',
-                       'en':'Light / Dark in Settings → Appearance. Choice survives restart. Light variant of every screen and the keyboard.'})
+                notes={'pl':'Wyraźniejsze jasne karty, osobne Audio i Kamera, duże kafelki sensorów, pełnoekranowy podgląd z przyciskami na obrazie i nowe ikony.',
+                       'de':'Deutlichere helle Karten, separate Audio- und Kamera-Einstellungen, große Sensorkacheln, Vollbildkamera mit Bedienelementen im Bild und neue Symbole.',
+                       'en':'Stronger light-theme cards, separate Audio and Camera settings, large sensor tiles, full-screen video with overlay controls and refreshed icons.'})
 
 
 def main():
@@ -39,13 +39,45 @@ def main():
     (out/'ota.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     for name in ('PILOT_LCD_TEST_APP.bin','PILOT_LCD_TEST_FULL.bin'):
         shutil.copy2(ROOT/'firmware'/name,out/name)
-    (out/'notes.md').write_text(f'''ESP Remote v{version}: motywy Jasny / Ciemny. Wybór: Ustawienia → Wygląd, również Ogólne → Wyświetlacz → Wygląd. Działa od razu i zostaje po restarcie. Jasny wariant obejmuje wszystkie ekrany, klawiaturę i jaśniejsze góry na stronie głównej. Ciemny ekran główny pozostaje identyczny. Podgląd: docs/LIGHT_DARK_V1_3_7.png; opis: docs/LIGHT_DARK_V1_3_7.md.
+    (out/'notes.md').write_text(f'''ESP Remote v{version}\n\n# V1.3.8 — sensory, kamera i osobne audio
 
-Wybór zapisuje się jako osobny klucz NVS. Zachowano blok Settings schema1 (264 bajty), Wi-Fi, hasło i klucz kamery. Po aktualizacji bez wcześniejszego wyboru motywu pozostaje ciemny. Reset ustawień przywraca ciemny. Karta SD nadal służy do nagrań i logów. Obraz kamery i próbki w teście kolorów zachowują swoje kolory.
+Jasny motyw ma ciemniejsze obramowania kart i większą różnicę między kartą a tłem.
+Ustawienia zawierają osobne strony Kamera i Audio. Audio grupuje głośność, odsłuch,
+alarm dźwięku i mówienie; Kamera grupuje obraz, tryb nocny, ruch i nagrania.
 
-Instalacja przez ekran aktualizacji: Sprawdź → Aktualizuj → Potwierdź. Potrzebny router z internetem i czas NTP. V1.3.1–V1.3.4 z niedziałającym HTTPS wymagają jednorazowego USB. Po dotychczasowej instalacji merged i bez udanego OTA: firmware.bin pod 0x10000, bez Erase all — zachowuje ustawienia. Sam zapis aplikacji nie przełącza slotu, jeśli wcześniejsze OTA wybrało inny. firmware-merged.bin pod 0x0 służy do czystej instalacji i usuwa ustawienia.
+Sensory mają sześć dużych kafelków w dwóch kolumnach: nazwa, jednostka, aktualna
+wartość i wskaźnik dostępności. Dotknięcie kafelka otwiera wykres. Dalsze pomiary
+i ustawienia są dostępne przez przewijanie; przycisk plus otwiera wyszukiwanie.
+Brak lub nieaktualne dane pokazują kreskę zamiast starego odczytu.
 
-Weryfikacja: rzeczywisty LVGL, 144 ekrany w obu motywach i trzech językach, dotyk, przewijanie i klawiatura, przełączanie motywów oraz zachowanie edytowanego hasła. Test zapisu/odczytu klucza, niepoprawnych wartości i zachowania starego bloku ustawień. Kontrast tekstów jasnego motywu sprawdzono po kwantyzacji RGB565. Kompilacja obu wariantów firmware i testy OTA/TLS w Actions. Podgląd zawiera przykładowe dane. Nie wykonano testów na fizycznym pilocie.
+Podgląd kamery wypełnia ekran 240 × 320 bez nagłówka Kamera 1. Przyciski na obrazie
+obsługują powrót, cały kadr/powiększenie, głośność, ustawienia kamery, przytrzymanie
+mikrofonu, zdjęcie, nagrywanie i odsłuch. Dotknięcie wolnej części obrazu chowa lub
+pokazuje przyciski. Przełączenie kadru nie zmienia pliku zdjęcia ani nagrania.
+Cały kadr zachowuje obraz 4:3 i czarne pasy; powiększenie przycina boki.
+
+Bufory obrazu 320 × 240 używają PSRAM. Brak obrazu jest sygnalizowany, a funkcje
+wymagające kamery, audio lub SD są blokowane, gdy te zasoby są niedostępne.
+Przyciski mają pola dotykowe co najmniej 44 × 44 px.
+
+Ikony w całym interfejsie pochodzą z jednej wersji Lucide. Źródło i licencja są
+w assets/LUCIDE_SOURCE.json i assets/Lucide-LICENSE.txt. Ciemna strona główna ma
+zachowany układ, tekst i kolory; zmieniono na niej wyłącznie ikonki.
+
+![Rzeczywisty renderer LVGL; przykładowe pomiary i obraz testowy](DASHBOARD_CAMERA_V1_3_8.png)
+
+Sprawdzono 150 ekranów PL/DE/EN w obu motywach, duże cele dotykowe, przewijanie,
+klawiaturę, aktualizacje odczytów, nawigację do wykresu, rozdział ustawień audio,
+przyciski i gesty podglądu, zapis głośności oraz działanie OTA w rendererze LVGL.
+Test geometrii sprawdza zachowanie proporcji, przycięcie oraz pokrycie całego
+bufora podczas dekodowania QVGA i VGA. Testy OTA, TLS, motywu, LCD i pakowania
+pozostają w procesie wydania. Testy na fizycznym pilocie pozostają do wykonania.
+
+Aktualizacja OTA zachowuje konfigurację i dane SD. Po wcześniejszej instalacji
+merged, bez późniejszego przełączenia slotu OTA, plik firmware.bin można wgrać
+przez USB pod 0x10000 bez Erase all. Po udanym OTA użyj ekranu aktualizacji;
+sam zapis pod 0x10000 nie wybiera aktywnej partycji. Obraz firmware-merged.bin
+pod 0x0 przeznaczono do czystej instalacji i usuwa ustawienia.
 ''')
     checks=[]
     for path in sorted(out.iterdir()):

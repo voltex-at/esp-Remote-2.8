@@ -141,7 +141,7 @@ void setup(){
  void*probe=heap_caps_malloc(256*1024,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);if(!probe){Board::bootError("PSRAM allocation failed","LVGL needs external RAM");return;}heap_caps_free(probe);
  if(!TlsMemory::begin()){Board::bootError("TLS allocator init failed","Check PSRAM / USB log");return;}
  stage(BootStage::Lvgl);Board::bootStatus("LVGL startup","RGB565 / native portrait");lv_init();if(!Board::begin()){Board::bootError("LVGL display allocation failed","Read the USB startup log");return;}
- videoPixels=(uint16_t*)ps_calloc(224*168,2);if(!videoPixels){message("Wymagana PSRAM OPI 8MB");}
+ videoPixels=(uint16_t*)ps_calloc(Video::pixels,sizeof(uint16_t));if(!videoPixels){message("Wymagana PSRAM OPI 8MB");}
  Ui::begin(dispatch);Ui::update(snapshot());Board::brightness(snapshot().settings.brightness);lv_refr_now(nullptr);
  stage(BootStage::Sd);bool sd=Storage::begin();{Guard g(stateMutex);state.sd=sd;}
  stage(BootStage::Audio);bool audio=Board::audioBegin();Serial.printf("[BOOT] SD=%d audio=%d\n",sd,audio);

@@ -1,6 +1,8 @@
 // Actual LVGL software renderer. Demo values exist only in this desktop preview.
 #include "ui.h"
 #include "ui_palette.h"
+#include "assets.h"
+#include "video_geometry.h"
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
@@ -26,6 +28,8 @@ static lv_obj_t*findLabel(lv_obj_t*parent,const char*text){if(lv_obj_check_type(
 static lv_obj_t*findType(lv_obj_t*parent,const lv_obj_class_t*type){if(lv_obj_check_type(parent,type))return parent;for(uint32_t i=0;i<lv_obj_get_child_cnt(parent);i++)if(auto*o=findType(lv_obj_get_child(parent,i),type))return o;return nullptr;}
 static void dumpLabels(lv_obj_t*p){if(lv_obj_check_type(p,&lv_label_class))fprintf(stderr,"Label: %s\n",lv_label_get_text(p));for(uint32_t i=0;i<lv_obj_get_child_cnt(p);i++)dumpLabels(lv_obj_get_child(p,i));}
 static void click(const char*text){lv_obj_update_layout(lv_scr_act());auto*l=findLabel(lv_scr_act(),text);if(!l)fprintf(stderr,"Missing UI target: %s\n",text);assert(l);lv_event_send(lv_obj_get_parent(l),LV_EVENT_CLICKED,nullptr);}
+static lv_obj_t*findImage(lv_obj_t*p,const lv_img_dsc_t*src){if(lv_obj_check_type(p,&lv_img_class)&&lv_img_get_src(p)==src)return p;for(uint32_t i=0;i<lv_obj_get_child_cnt(p);i++)if(auto*o=findImage(lv_obj_get_child(p,i),src))return o;return nullptr;}
+static void clickImage(const lv_img_dsc_t*src){auto*i=findImage(lv_scr_act(),src);assert(i);lv_event_send(lv_obj_get_parent(i),LV_EVENT_CLICKED,nullptr);}
 static void pressKey(lv_obj_t*kb,const char*key){for(uint16_t i=0;i<100;i++){const char*t=lv_btnmatrix_get_btn_text(kb,i);if(!t)break;if(!strcmp(t,key)){lv_btnmatrix_set_selected_btn(kb,i);lv_event_send(kb,LV_EVENT_VALUE_CHANGED,nullptr);return;}}assert(false);}
 static void save(const char*name){lv_obj_update_layout(lv_scr_act());lv_refr_now(nullptr);auto*s=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);if(!s){fprintf(stderr,"snapshot failed %s\n",name);exit(1);}FILE*f=fopen(name,"wb");fprintf(f,"P6\n240 320\n255\n");auto*p=(lv_color_t*)s->data;for(int i=0;i<240*320;i++){lv_color32_t c; c.full=lv_color_to32(p[i]);fputc(c.ch.red,f);fputc(c.ch.green,f);fputc(c.ch.blue,f);}fclose(f);lv_snapshot_free(s);}
 int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t buf[240*20];static lv_disp_draw_buf_t b;lv_disp_draw_buf_init(&b,buf,nullptr,240*20);static lv_disp_drv_t d;lv_disp_drv_init(&d);d.hor_res=240;d.ver_res=320;d.flush_cb=flush;d.draw_buf=&b;lv_disp_drv_register(&d);Ui::begin(command);
@@ -34,9 +38,9 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  const char*ssids[]={"ESP32-BABY-CAM","Home-24G","Guest","Office-Enterprise","A-very-long-SSID-with-32-letters"};for(int i=0;i<5;i++){snprintf(s.networks[i].ssid,33,"%s",ssids[i]);s.networks[i].rssi=-42-i*10;s.networks[i].security=i==2?WifiSecurity::Open:i==3?WifiSecurity::Unsupported:WifiSecurity::Wpa2;}
  s.bmeOnline=s.scdOnline=s.bmeFresh=s.scdFresh=true;s.temperature=23.4;s.humidity=54;s.co2=742;s.iaq=42;s.pressure=1013.2;s.eco2=608;s.iaqAccuracy=2;s.historyCount=60;s.sd=true;s.sdFree=12ULL*1024*1024*1024;strcpy(s.timeText,"14:26");strcpy(s.ip,"192.168.4.2");strcpy(s.message,"");
  for(int m=0;m<6;m++)for(int i=0;i<60;i++)s.history[m][i]=metricValue(s,m)+sin(i*.34f)*(m==2?110:m==1?7:m==3?15:2);
- Ui::update(s);const Screen screens[]={Screen::Home,Screen::Sensors,Screen::Metric,Screen::Settings,Screen::General,Screen::Display,Screen::CameraSettings,Screen::Network,Screen::Scan,Screen::Battery,Screen::System,Screen::Alerts,Screen::Cameras,Screen::Audio,Screen::Live,Screen::Limits,Screen::SensorSettings,Screen::Recordings,Screen::Pair,Screen::WifiNetworks,Screen::Languages,Screen::Colors,Screen::Appearance,Screen::Update};
+ Ui::update(s);const Screen screens[]={Screen::Home,Screen::Sensors,Screen::Metric,Screen::Settings,Screen::General,Screen::Display,Screen::CameraSettings,Screen::Network,Screen::Scan,Screen::Battery,Screen::System,Screen::Alerts,Screen::Cameras,Screen::Audio,Screen::Live,Screen::Limits,Screen::SensorSettings,Screen::Recordings,Screen::Pair,Screen::WifiNetworks,Screen::Languages,Screen::Colors,Screen::Appearance,Screen::Update,Screen::AudioSettings};
  for(int lang=0;lang<3;lang++){s.settings.language=lang;Ui::update(s);for(unsigned i=0;i<sizeof screens/sizeof screens[0];i++){Ui::show(screens[i],0);Ui::update(s);lv_tick_inc(30);lv_timer_handler();char name[512];snprintf(name,sizeof name,"%s/ui_%d_%02d.ppm",argv[1],lang,i);save(name);}
-  const char*settingsNames[]={"Ustawienia","Einstellungen","Settings"};const char*temperatureNames[]={"Temperatura","Temperatur","Temperature"};const char*dimNames[]={"Przygaś po [s]","Dimmen nach [s]","Dim after [s]"};
+  const char*settingsNames[]={"Ustawienia","Einstellungen","Settings"};const char*temperatureNames[]={"Temp.","Temp.","Temp."};const char*dimNames[]={"Przygaś po [s]","Dimmen nach [s]","Dim after [s]"};
   Ui::show(Screen::Home);Ui::update(s);lv_obj_update_layout(lv_scr_act());assert(findLabel(lv_scr_act(),settingsNames[lang]));
   Ui::show(Screen::Sensors);Ui::update(s);lv_obj_update_layout(lv_scr_act());auto*temperature=findLabel(lv_scr_act(),temperatureNames[lang]);assert(temperature);assert(lv_obj_get_height(temperature)<=lv_obj_get_style_text_font(temperature,LV_PART_MAIN)->line_height);
   Ui::show(Screen::Display);Ui::update(s);lv_obj_update_layout(lv_scr_act());auto*dim=findLabel(lv_scr_act(),dimNames[lang]);auto*value=findLabel(lv_scr_act(),"60");assert(dim&&value);lv_area_t a,b;lv_obj_get_coords(dim,&a);lv_obj_get_coords(value,&b);assert(a.y2<b.y1);
@@ -59,8 +63,8 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  s.theme=ThemeMode::Dark;Ui::update(s);
  // Sensor overview readings update without navigating or rebuilding the page.
  s.settings.language=0;Ui::update(s);Ui::show(Screen::Sensors);Ui::update(s);
- s.temperature=27.1f;s.co2=987;Ui::update(s);assert(findLabel(lv_scr_act(),"27.1 °C")&&findLabel(lv_scr_act(),"987 ppm"));
- s.temperature=NAN;Ui::update(s);assert(findLabel(lv_scr_act(),"— °C")&&findLabel(lv_scr_act(),"○ Brak danych"));
+ s.temperature=27.1f;s.co2=987;Ui::update(s);assert(findLabel(lv_scr_act(),"27.1")&&findLabel(lv_scr_act(),"987"));
+ s.temperature=NAN;Ui::update(s);assert(findLabel(lv_scr_act(),"—"));
  s.temperature=23.4f;s.co2=742;Ui::update(s);
  // Every submenu target, bottom-of-list reachability and sibling spacing in
  // all languages. Home is independently compared pixel-for-pixel by Python.
@@ -95,9 +99,9 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  sentCount=0;click("Home-24G");auto*input=findType(lv_scr_act(),&lv_textarea_class);auto*kb=findType(lv_scr_act(),&lv_keyboard_class);assert(input&&kb&&lv_textarea_get_password_mode(input));assert(!strlen(lv_textarea_get_text(input)));
  pressKey(kb,"a");pressKey(kb,"b");pressKey(kb,LV_SYMBOL_BACKSPACE);assert(!strcmp(lv_textarea_get_text(input),"a"));pressKey(kb,"ABC");pressKey(kb,"A");pressKey(kb,"1#");pressKey(kb,"1");assert(!strcmp(lv_textarea_get_text(input),"aA1"));pressKey(kb,"abc");
  lv_textarea_set_text(input,"short");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==0&&findType(lv_scr_act(),&lv_textarea_class));
- click(LV_SYMBOL_EYE_OPEN);assert(!lv_textarea_get_password_mode(input));click(LV_SYMBOL_EYE_CLOSE);assert(lv_textarea_get_password_mode(input));
+ clickImage(&img_eye);assert(!lv_textarea_get_password_mode(input));clickImage(&img_eye_off);assert(lv_textarea_get_password_mode(input));
  lv_textarea_set_text(input,"Example-Password");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==4&&sent[0].value==NetworkMode&&!strcmp(sent[0].text,"1")&&sent[1].value==WifiSsid&&!strcmp(sent[1].text,"Home-24G")&&sent[2].value==WifiPassword&&!strcmp(sent[2].text,"Example-Password")&&sent[3].action==Action::Connect);Ui::update(s);assert(Ui::current()==Screen::Network);
- Ui::show(Screen::WifiNetworks);sentCount=0;click("Home-24G");click("×");assert(sentCount==0);Ui::update(s);
+ Ui::show(Screen::WifiNetworks);sentCount=0;click("Home-24G");clickImage(&img_close);assert(sentCount==0);Ui::update(s);
  Ui::show(Screen::WifiNetworks);sentCount=0;click("Home-24G");input=findType(lv_scr_act(),&lv_textarea_class);kb=findType(lv_scr_act(),&lv_keyboard_class);lv_textarea_set_text(input,"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==0);lv_textarea_set_text(input,"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");pressKey(kb,LV_SYMBOL_OK);assert(sentCount==4&&strlen(sent[2].text)==64);Ui::update(s);
  Ui::show(Screen::WifiNetworks);sentCount=0;click("Guest");assert(sentCount==4&&sent[2].value==WifiPassword&&!strlen(sent[2].text)&&sent[3].action==Action::Connect);Ui::update(s);
  // Every printable ASCII character is reachable on the large paged keyboard;
@@ -165,7 +169,29 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  Ui::show(Screen::WifiNetworks);click("Home-24G");input=findType(lv_scr_act(),&lv_textarea_class);kb=findType(lv_scr_act(),&lv_keyboard_class);lv_textarea_set_text(input,"Example-Password");pressKey(kb,"1#");pressKey(kb,"#+");s.theme=ThemeMode::Light;Ui::update(s);input=findType(lv_scr_act(),&lv_textarea_class);kb=findType(lv_scr_act(),&lv_keyboard_class);assert(input&&kb&&!strcmp(lv_textarea_get_text(input),"Example-Password")&&lv_textarea_get_password_mode(input)&&findLabel(lv_scr_act(),"Home-24G"));pressKey(kb,"!");sentCount=0;pressKey(kb,LV_SYMBOL_OK);assert(sentCount==4&&sent[1].value==WifiSsid&&!strcmp(sent[1].text,"Home-24G")&&!strcmp(sent[2].text,"Example-Password!"));Ui::update(s);
  Ui::show(Screen::Metric);s.theme=ThemeMode::Dark;Ui::update(s);assert(Ui::current()==Screen::Metric);s.theme=ThemeMode::Light;Ui::update(s);assert(Ui::current()==Screen::Metric);Ui::show(Screen::Scan);s.theme=ThemeMode::Dark;Ui::update(s);assert(Ui::current()==Screen::Scan);capture=false;
  puts("Themes: real touch, no duplicate save, immediate repaint, back paths and preserved Wi-Fi draft/context OK.");
+ // Dashboard, independent audio settings and the real full-screen viewer.
+ capture=true;s.settings.language=0;s.theme=ThemeMode::Dark;s.camera=s.audioCap=s.motionCap=s.sd=true;s.playing=s.recording=s.listening=false;Ui::update(s);
+ Ui::show(Screen::Sensors);sentCount=0;tap(60,164);Ui::update(s);assert(Ui::current()==Screen::Metric&&findLabel(lv_scr_act(),"Temperatura"));
+ Ui::show(Screen::CameraSettings);assert(!findLabel(lv_scr_act(),"Alarm dźwięku")&&!findLabel(lv_scr_act(),"Głośność"));Ui::show(Screen::AudioSettings);assert(findLabel(lv_scr_act(),"Alarm dźwięku")&&findLabel(lv_scr_act(),"Głośność"));
+ static uint16_t fixture[Video::pixels];for(int y=0;y<Video::height;y++)for(int x=0;x<Video::width;x++){uint32_t c=x<48?0xb9364b:x>=272?0x386daa:((x/32+y/24)%2?0x8ba79a:0xd1dfce);fixture[y*Video::width+x]=lv_color_hex(c).full;}
+ for(int theme=0;theme<2;theme++){s.theme=ThemeSettings::normalize(theme);Ui::update(s);Ui::show(Screen::Live);Ui::frame(fixture);Ui::update(s);lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());assert(!findLabel(lv_scr_act(),"Kamera 1"));
+
+  char name[512];snprintf(name,sizeof name,"%s/camera_cover_%d.ppm",argv[1],theme);save(name);
+  sentCount=0;tap(90,51);assert(sentCount==0);snprintf(name,sizeof name,"%s/camera_whole_%d.ppm",argv[1],theme);save(name);
+  tap(210,98);auto*sl=findType(lv_scr_act(),&lv_slider_class);assert(sl);checkTargets(lv_scr_act());lv_slider_set_value(sl,72,LV_ANIM_OFF);lv_event_send(sl,LV_EVENT_VALUE_CHANGED,nullptr);assert(findLabel(lv_scr_act(),"72%"));sentCount=0;lv_event_send(sl,LV_EVENT_RELEASED,nullptr);assert(sentCount==1&&sent[0].action==Action::Setting&&sent[0].value==Volume&&!strcmp(sent[0].text,"72"));
+  snprintf(name,sizeof name,"%s/camera_volume_%d.ppm",argv[1],theme);save(name);clickImage(&img_close);
+  sentCount=0;tap(150,222);assert(sentCount==1&&sent[0].action==Action::Record&&sent[0].value==1);s.recording=true;s.clipMs=12000;Ui::update(s);assert(findImage(lv_scr_act(),&img_stop)&&findLabel(lv_scr_act(),"00:12"));sentCount=0;tap(150,222);assert(sentCount==1&&sent[0].action==Action::Record&&sent[0].value==0);s.recording=false;Ui::update(s);
+  sentCount=0;tap(90,222);assert(sentCount==1&&sent[0].action==Action::Snapshot);sentCount=0;tap(210,222);assert(sentCount==1&&sent[0].action==Action::Listen&&sent[0].value==1);
+  sentCount=0;pointerStep(30,222,true);pointerStep(30,222,true);pointerStep(30,222,false);pointerStep(30,222,false);assert(sentCount==2&&sent[0].action==Action::Talk&&sent[0].value==1&&sent[1].value==0);
+  tap(120,165);assert(lv_obj_has_flag(lv_obj_get_parent(lv_obj_get_parent(findImage(lv_scr_act(),&img_back))),LV_OBJ_FLAG_HIDDEN));tap(120,165);assert(!lv_obj_has_flag(lv_obj_get_parent(lv_obj_get_parent(findImage(lv_scr_act(),&img_back))),LV_OBJ_FLAG_HIDDEN)); // hide and reveal the HUD without dispatching media actions.
+  tap(210,148);Ui::update(s);assert(Ui::current()==Screen::CameraSettings);lv_obj_update_layout(lv_scr_act());tap(30,46);Ui::update(s);assert(Ui::current()==Screen::Live);lv_obj_update_layout(lv_scr_act());
+  tap(90,98); // Restore cover mode before next language/theme.
+  tap(30,51);Ui::update(s);assert(Ui::current()==Screen::Cameras);
+ }
+ s.theme=ThemeMode::Light;s.camera=s.audioCap=false;Ui::update(s);Ui::show(Screen::Live);assert(findLabel(lv_scr_act(),"Brak obrazu"));sentCount=0;tap(150,290);assert(sentCount==0);
+ s.playing=true;Ui::update(s);Ui::frame(fixture);sentCount=0;tap(30,51);Ui::update(s);assert(sentCount==2&&sent[0].action==Action::Play&&sent[0].value==0&&sent[1].action==Action::LoadFiles&&Ui::current()==Screen::Cameras);s.playing=false;s.theme=ThemeMode::Dark;Ui::update(s);capture=false;
+ puts("Viewer: full-screen/whole-frame, overlay volume save, snapshot, record start/stop, listen, hold-to-talk, offline guards and playback close OK.");
  // Stress rebuilds and missing values, including high CO2 (32-bit chart coordinates).
  for(int i=0;i<150;i++){s.camera=i%2;s.alertCount=i%3;s.co2=5000;s.history[2][59]=5000;Ui::update(s);Ui::show(Screen::Metric,2);Ui::update(s);lv_tick_inc(20);lv_timer_handler();}
  s.bmeFresh=s.scdFresh=false;s.temperature=s.humidity=s.co2=NAN;Ui::show(Screen::Metric);Ui::update(s);char name[512];snprintf(name,sizeof name,"%s/ui_offline.ppm",argv[1]);save(name);
- printf("Rendered 144 light/dark screens, 6 password views, 3 scan states, offline and 150 transitions. Wi-Fi/password/language callbacks OK.\n");return 0;}
+ printf("Rendered 150 light/dark screens, 6 password views, 3 scan states, offline and 150 transitions. Wi-Fi/password/language callbacks OK.\n");return 0;}

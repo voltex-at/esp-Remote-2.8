@@ -4,7 +4,7 @@
 #include <math.h>
 #include "ota_policy.h"
 #include "theme_settings.h"
-enum class Screen:uint8_t { Home,Cameras,Live,Sensors,Metric,Settings,General,Display,Network,Pair,Alerts,Audio,CameraSettings,SensorSettings,Scan,Recordings,Battery,System,Limits,WifiNetworks,Languages,Update,Colors,Appearance };
+enum class Screen:uint8_t { Home,Cameras,Live,Sensors,Metric,Settings,General,Display,Network,Pair,Alerts,Audio,CameraSettings,SensorSettings,Scan,Recordings,Battery,System,Limits,WifiNetworks,Languages,Update,Colors,Appearance,AudioSettings };
 enum class Action:uint8_t { Setting,Scan,Connect,Snapshot,Record,Listen,Talk,CameraControl,LoadFiles,Play,Reset,ClearAlerts,Reboot,WifiScan,OtaCheck,OtaInstall };
 enum class WifiScanState:uint8_t { Idle,Scanning,Done,Failed };
 enum class WifiLinkState:uint8_t { Offline,Connecting,Connected,Failed };

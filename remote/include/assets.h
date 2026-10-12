@@ -30,7 +30,16 @@ extern const lv_img_dsc_t img_play;
 extern const lv_img_dsc_t img_plus;
 extern const lv_img_dsc_t img_power;
 extern const lv_img_dsc_t img_globe;
+extern const lv_img_dsc_t img_expand;
+extern const lv_img_dsc_t img_minimize;
+extern const lv_img_dsc_t img_volume;
+extern const lv_img_dsc_t img_record;
+extern const lv_img_dsc_t img_stop;
+extern const lv_img_dsc_t img_close;
+extern const lv_img_dsc_t img_eye;
+extern const lv_img_dsc_t img_eye_off;
+extern const lv_img_dsc_t img_right;
 extern const lv_img_dsc_t img_mountains;
-extern const lv_img_dsc_t img_mountains_light;
 extern const lv_img_dsc_t img_module;
+extern const lv_img_dsc_t img_mountains_light;
 }
