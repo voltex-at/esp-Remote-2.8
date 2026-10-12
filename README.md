@@ -5,10 +5,11 @@ Wi-Fi z wyszukiwaniem sieci i klawiaturą hasła, języki polski/niemiecki/angie
 sensory BME688/BSEC2 i SCD41 przez I²C/pogo, ESP-CAM przez router lub Direct,
 karta SD przeznaczona na nagrania i logi. Nie zmieniono schematu ustawień V1.2.
 
-V1.3.9 synchronizuje procent baterii w nagłówku i diagnostyce. Dodaje piorun
-oraz animację przy zasilaniu szacowanym z napięcia, większą datę i ikony na stronie
-głównej. Wszystkie sześć pomiarów mieści się na jednej stronie, z alarmami i
-czytelną ikoną pogo. [Opis i podgląd](docs/BATTERY_SENSORS_V1_3_9.md).
+V1.3.10 dodaje **sensory Bluetooth BTHome / BLE ESS**: najpierw dodaj urządzenie,
+potem wybierz wyświetlany pomiar. Drugi ekran główny otwiera się przesunięciem palca.
+Nowe większe ikony, bez daty, bateria bliżej procentów. Połączenie zaczyna się od
+WLAN / Bluetooth / ESP, a aktualizacje są w **System → Software**.
+[Obsługiwane sensory, instrukcja i podgląd](docs/SENSORS_BLE_V1_3_10.md).
 
 V1.3.8 wzmacnia jasne obramowania, rozdziela ustawienia **Kamera / Audio**,
 przebudowuje sensory na duże kafelki i dodaje podgląd kamery na całym ekranie
@@ -41,7 +42,7 @@ preferują PSRAM, z zapasową pulą i diagnostyką RAM.
 | `PILOT_LCD_TEST_APP.bin` | Niezależny test LCD/dotyku przez USB pod `0x10000` |
 | `ota.json` | Wersja, sprzęt docelowy, rozmiar i SHA-256 aplikacji |
 
-Na pilocie: **Ustawienia → System → Aktualizacja → Sprawdź → Aktualizuj → Potwierdź**.
+Na pilocie: **Ustawienia → System → Software → Sprawdź → Aktualizuj → Potwierdź**.
 Połącz pilot z routerem z dostępem do internetu i poczekaj na ustawienie czasu NTP.
 Zatrzymaj nagrywanie/odtwarzanie, audio i skan Wi-Fi przed aktualizacją.
 Sprawdzenie wersji ani połączenie Wi-Fi nie rozpoczyna instalacji automatycznie.
@@ -65,5 +66,5 @@ Istniejące wydania nie są nadpisywane. Każdy commit nie oznacza nowego wydani
 Pełna dokumentacja sprzętu i funkcji: [README_PL.md](README_PL.md).
 OTA: [docs/OTA.md](docs/OTA.md). Diagnostyka LCD: [docs/LCD_FIX_V1_2.md](docs/LCD_FIX_V1_2.md).
 
-V1.3.9 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
+V1.3.10 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
 działania LCD, sensorów, radia ani aktualizacji przy zaniku zasilania.

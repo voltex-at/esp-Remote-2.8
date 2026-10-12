@@ -72,12 +72,13 @@ static void playbackStep(){
  if(millis()-playStart>=playStamp){render(jpg,playBytes);playPending=false;}
 }
 void task(void*){
+ AppState*local=allocateStateCopy();if(!local){message("Brak PSRAM dla kamery");vTaskDelete(nullptr);return;}AppState&s=*local;
  jpg=(uint8_t*)ps_malloc(MAX_JPEG_BYTES);decoded=(uint16_t*)ps_malloc(Video::bytes);
  if(!jpg||!decoded){message("Brak PSRAM dla obrazu kamery");vTaskDelete(nullptr);return;}
  TJpgDec.setJpgScale(1);TJpgDec.setSwapBytes(false);TJpgDec.setCallback(jpgBlock);
  for(;;){
  if(Ota::busy()){vTaskDelay(pdMS_TO_TICKS(50));continue;}
- AppState s=snapshot();Command cmd;
+ copyState(s);Command cmd;
  while(xQueueReceive(mediaCommands,&cmd,0)==pdTRUE){switch(cmd.action){
  case Action::Snapshot:if(s.camera){int n=fetch(s.settings);if(n>0)snapshotPhoto(n);else message("Nie pobrano zdjecia");}else message("Kamera offline");break;
  case Action::Record:if(clip)stopClip();else if(s.camera&&!playing)startClip();else message("Kamera offline lub trwa odtwarzanie");break;
@@ -88,7 +89,7 @@ void task(void*){
  case Action::Play:if(cmd.value&& !clip)openPlayback(cmd.text);else stopPlayback();break;
  default:break;
  }}
- s=snapshot();Board::audioSession(s.settings.cameraHost,s.settings.pairToken,s.listening,s.talking);
+ copyState(s);Board::audioSession(s.settings.cameraHost,s.settings.pairToken,s.listening,s.talking);
  if(playing)playbackStep();
  if(!s.wifi){if(clip)stopClip();{Guard g(stateMutex);state.camera=false;state.listening=state.talking=false;}vTaskDelay(pdMS_TO_TICKS(100));continue;}
  if(millis()-lastStatus>=2500){lastStatus=millis();status(s.settings);}

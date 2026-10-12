@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <SD_MMC.h>
 #include <Preferences.h>
+#include <new>
 #include "app_state.h"
 #include "board_config.h"
 #include "video_geometry.h"
@@ -13,7 +14,8 @@ extern QueueHandle_t commands,mediaCommands;
 extern uint16_t *videoPixels;
 extern bool videoDirty;
 struct Guard { SemaphoreHandle_t m;Guard(SemaphoreHandle_t x):m(x){xSemaphoreTake(m,portMAX_DELAY);}~Guard(){xSemaphoreGive(m);} };
-AppState snapshot();
+void copyState(AppState&);
+AppState* allocateStateCopy();
 void message(const char*);
 void alert(const char*);
 void dispatch(Action,int,const char*);

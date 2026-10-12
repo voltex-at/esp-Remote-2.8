@@ -41,15 +41,16 @@ static void recover(){
  Wire.begin(Pins::sda,Pins::scl,100000);Wire.setTimeOut(20);
 }
 void task(void*){
+ AppState*local=allocateStateCopy();if(!local){message("Brak PSRAM dla sensorow");vTaskDelete(nullptr);return;}AppState&s=*local;
  prefs.begin("bsec-state",false);scd.begin(Wire,0x62);
  {Guard g(stateMutex);state.scanRunning=true;for(auto&h:state.history)for(float&v:h)v=NAN;}
  for(;;){
- uint32_t now=millis();AppState s=snapshot();
+ uint32_t now=millis();copyState(s);
  if(s.scanRunning&&!scanning){scanning=true;addr=8;Guard g(stateMutex);memset(state.found,0,sizeof state.found);}
  if(!scanning&&now-lastScan>=10000){scanning=true;addr=8;Guard g(stateMutex);state.scanRunning=true;memset(state.found,0,sizeof state.found);}
  if(scanning&&now-nextScan>=10){nextScan=now;bool seen;{Guard g(i2cMutex);if(digitalRead(Pins::sda)==LOW||digitalRead(Pins::scl)==LOW)recover();seen=probe(addr);}{Guard g(stateMutex);state.found[addr]=seen;}
  if(++addr>=120){scanning=false;lastScan=now;Guard g(stateMutex);state.scanRunning=false;}}
- s=snapshot();uint8_t want=s.found[0x76]?0x76:s.found[0x77]?0x77:0;
+ copyState(s);uint8_t want=s.found[0x76]?0x76:s.found[0x77]?0x77:0;
  // Only change detection at a completed scan, avoiding false removal mid-scan.
  if(!scanning){
  if(bme&&!want){bme=false;invalidateBme();message("BME688 odlaczony");}
@@ -63,9 +64,9 @@ void task(void*){
  if(scdWaiting&&now-scdStart>=500){int16_t e;{Guard g(i2cMutex);e=scd.startPeriodicMeasurement();}scdWaiting=false;scdRunning=e==0;scdRead=now;Guard g(stateMutex);state.scdOnline=scdRunning;}
  if(bme){bool ok;{Guard g(i2cMutex);ok=bsec.run();}{Guard g(stateMutex);state.bsecStatus=bsec.status;state.bmeStatus=bsec.sensor.status;}
  if(!ok&&(bsec.status<0||bsec.sensor.status<0)){bme=false;invalidateBme();}
- if(now-lastStateSave>=6UL*60*60*1000&&snapshot().iaqAccuracy>=2){uint8_t blob[BSEC_MAX_STATE_BLOB_SIZE];if(bsec.getState(blob)){char key[8];snprintf(key,sizeof key,"bsec%02x",bmeAddress);prefs.putBytes(key,blob,sizeof blob);lastStateSave=now;}}
+ if(now-lastStateSave>=6UL*60*60*1000&&s.iaqAccuracy>=2){uint8_t blob[BSEC_MAX_STATE_BLOB_SIZE];if(bsec.getState(blob)){char key[8];snprintf(key,sizeof key,"bsec%02x",bmeAddress);prefs.putBytes(key,blob,sizeof blob);lastStateSave=now;}}
  // Save first accurate state once, then six-hour cadence; avoids flash wear.
- if(lastStateSave==0&&snapshot().iaqAccuracy>=2){uint8_t blob[BSEC_MAX_STATE_BLOB_SIZE];if(bsec.getState(blob)){char key[8];snprintf(key,sizeof key,"bsec%02x",bmeAddress);prefs.putBytes(key,blob,sizeof blob);lastStateSave=now;}}
+ if(lastStateSave==0&&s.iaqAccuracy>=2){uint8_t blob[BSEC_MAX_STATE_BLOB_SIZE];if(bsec.getState(blob)){char key[8];snprintf(key,sizeof key,"bsec%02x",bmeAddress);prefs.putBytes(key,blob,sizeof blob);lastStateSave=now;}}
  }
  if(scdRunning&&now-scdRead>=1000){scdRead=now;bool ready=false;uint16_t co2=0;float t,rh;int16_t e;
  {Guard g(i2cMutex);e=scd.getDataReadyStatus(ready);if(!e&&ready)e=scd.readMeasurement(co2,t,rh);}
@@ -73,9 +74,9 @@ void task(void*){
  else {errors=0;if(ready&&co2){Guard g(stateMutex);state.co2=co2;state.scdTemperature=t;state.scdHumidity=rh;state.scdMs=now;state.scdFresh=true;}}
  }
  {Guard g(stateMutex);state.bmeFresh=bme&&state.bmeMs&&now-state.bmeMs<15000;state.scdFresh=scdRunning&&state.scdMs&&now-state.scdMs<20000;}
- s=snapshot();if(now-lastHistory>=(uint32_t)s.settings.logIntervalSec*1000){lastHistory=now;
+ copyState(s);if(now-lastHistory>=(uint32_t)s.settings.logIntervalSec*1000){lastHistory=now;
  {Guard g(stateMutex);for(int m=0;m<METRIC_COUNT;m++){for(int i=1;i<HISTORY_COUNT;i++)state.history[m][i-1]=state.history[m][i];state.history[m][HISTORY_COUNT-1]=metricValid(state,m)?metricValue(state,m):NAN;}if(state.historyCount<HISTORY_COUNT)state.historyCount++;state.sampleMs=now;}
- Storage::logSample(snapshot());
+ copyState(s);Storage::logSample(s);
  static uint8_t alarmBits=0;uint8_t bits=0;if(metricValid(s,0)){float temp=metricValue(s,0),rh=metricValue(s,1);if(temp<s.settings.tempMin||temp>s.settings.tempMax)bits|=1;if(rh<s.settings.humidityMin||rh>s.settings.humidityMax)bits|=2;}if(s.bmeFresh&&s.iaqAccuracy>=2&&s.iaq>s.settings.iaqMax)bits|=8;if(s.scdFresh&&s.co2>s.settings.co2Max)bits|=4;
  const char* texts[]={"Temperatura poza zakresem","Wilgotnosc poza zakresem","Wysokie CO2 (SCD41)","Wysoki IAQ (BME688)"};for(int i=0;i<4;i++)if((bits&(1<<i))&&!(alarmBits&(1<<i)))alert(texts[i]);alarmBits=bits;
  }

@@ -5,10 +5,14 @@
 #include "ota_policy.h"
 #include "theme_settings.h"
 #include "battery_monitor.h"
-enum class Screen:uint8_t { Home,Cameras,Live,Sensors,Metric,Settings,General,Display,Network,Pair,Alerts,Audio,CameraSettings,SensorSettings,Scan,Recordings,Battery,System,Limits,WifiNetworks,Languages,Update,Colors,Appearance,AudioSettings };
-enum class Action:uint8_t { Setting,Scan,Connect,Snapshot,Record,Listen,Talk,CameraControl,LoadFiles,Play,Reset,ClearAlerts,Reboot,WifiScan,OtaCheck,OtaInstall };
+#include "sensor_registry.h"
+enum class Screen:uint8_t { Home,Cameras,Live,Sensors,Metric,Settings,General,Display,Network,Pair,Alerts,Audio,CameraSettings,SensorSettings,Scan,Recordings,Battery,System,Limits,WifiNetworks,Languages,Update,Colors,Appearance,AudioSettings,WifiSettings,Bluetooth,Direct,AddSensor,SensorValue };
+enum class Action:uint8_t { Setting,Scan,Connect,Snapshot,Record,Listen,Talk,CameraControl,LoadFiles,Play,Reset,ClearAlerts,Reboot,WifiScan,OtaCheck,OtaInstall,BleScan,SensorAdd,SensorSelect,SensorRemove };
 enum class WifiScanState:uint8_t { Idle,Scanning,Done,Failed };
 enum class WifiLinkState:uint8_t { Offline,Connecting,Connected,Failed };
+enum class BleState:uint8_t { Off,Scanning,Done,Reading,Error };
+enum class BleError:uint8_t { None,Memory,Start,Read,Unsupported,Encrypted,Full,Save };
+struct BleSensor { SensorRegistry::Config config;int16_t rssi=-127;SensorRegistry::Reading reading;uint32_t updated[SensorRegistry::Measurements]={};bool encrypted=false; };
 enum class WifiSecurity:uint8_t { Open,Wpa,Wpa2,Wpa3,WpaWpa2,Wpa2Wpa3,Unsupported };
 struct WifiNetwork { char ssid[33]={};int16_t rssi=-127;WifiSecurity security=WifiSecurity::Open;uint8_t channel=0; };
 enum SettingKey:uint8_t { Brightness,Timeout,Language,LogInterval,Logging,Notifications,Volume,NetworkMode,WifiSsid,WifiPassword,CameraHost,PairToken,TempMin,TempMax,HumidityMin,HumidityMax,Co2Max,IaqMax,Appearance };
@@ -28,6 +32,10 @@ constexpr int METRIC_COUNT=6,HISTORY_COUNT=60,FILE_COUNT=12,ALERT_COUNT=8,WIFI_N
 struct AppState {
  Settings settings;
  ThemeMode theme=ThemeMode::Dark;
+ BleState bleState=BleState::Off;BleError bleError=BleError::None;
+ SensorRegistry::Device sensors[SensorRegistry::Capacity];uint8_t sensorCount=0,lastAdded=0;
+ uint32_t sensorGeneration=0,sensorAddedGeneration=0,bleGeneration=0,nowMs=0;
+ BleSensor bleDevices[12];uint8_t bleCount=0;
  Ota::Status ota;
  float temperature=NAN,humidity=NAN,co2=NAN,iaq=NAN,pressure=NAN,eco2=NAN,voc=NAN;
  float scdTemperature=NAN,scdHumidity=NAN;
@@ -45,7 +53,7 @@ struct AppState {
  float history[METRIC_COUNT][HISTORY_COUNT];
  uint32_t clipStarted=0;
  char clipPath[96]={};
- char timeText[8]="--:--",dateText[16]="--.--.----",ip[20]="0.0.0.0",message[120]="Gotowy",cameraName[32]="Kamera 1";
+ char timeText[8]="--:--",ip[20]="0.0.0.0",message[120]={},cameraName[32]="Kamera 1";
  char files[FILE_COUNT][96]={},alerts[ALERT_COUNT][96]={};
  uint8_t fileCount=0,alertCount=0;
  WifiScanState wifiScan=WifiScanState::Idle;

@@ -1,9 +1,6 @@
 #pragma once
 #include <lvgl.h>
 extern "C" {
-extern const lv_img_dsc_t img_camera;
-extern const lv_img_dsc_t img_settings;
-extern const lv_img_dsc_t img_link;
 extern const lv_img_dsc_t img_mic;
 extern const lv_img_dsc_t img_speaker;
 extern const lv_img_dsc_t img_temp;
@@ -39,7 +36,16 @@ extern const lv_img_dsc_t img_eye;
 extern const lv_img_dsc_t img_eye_off;
 extern const lv_img_dsc_t img_right;
 extern const lv_img_dsc_t img_bolt;
+extern const lv_img_dsc_t img_bluetooth;
+extern const lv_img_dsc_t img_chip;
 extern const lv_img_dsc_t img_sensor;
+extern const lv_img_dsc_t img_home_camera;
+extern const lv_img_dsc_t img_home_sensor;
+extern const lv_img_dsc_t img_home_settings;
+extern const lv_img_dsc_t img_home_connect;
+extern const lv_img_dsc_t img_camera;
+extern const lv_img_dsc_t img_settings;
+extern const lv_img_dsc_t img_link;
 extern const lv_img_dsc_t img_mountains;
 extern const lv_img_dsc_t img_module;
 extern const lv_img_dsc_t img_mountains_light;

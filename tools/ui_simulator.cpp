@@ -34,14 +34,17 @@ static void clickImage(const lv_img_dsc_t*src){auto*i=findImage(lv_scr_act(),src
 static void pressKey(lv_obj_t*kb,const char*key){for(uint16_t i=0;i<100;i++){const char*t=lv_btnmatrix_get_btn_text(kb,i);if(!t)break;if(!strcmp(t,key)){lv_btnmatrix_set_selected_btn(kb,i);lv_event_send(kb,LV_EVENT_VALUE_CHANGED,nullptr);return;}}assert(false);}
 static void save(const char*name){lv_obj_update_layout(lv_scr_act());lv_refr_now(nullptr);auto*s=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);if(!s){fprintf(stderr,"snapshot failed %s\n",name);exit(1);}FILE*f=fopen(name,"wb");fprintf(f,"P6\n240 320\n255\n");auto*p=(lv_color_t*)s->data;for(int i=0;i<240*320;i++){lv_color32_t c; c.full=lv_color_to32(p[i]);fputc(c.ch.red,f);fputc(c.ch.green,f);fputc(c.ch.blue,f);}fclose(f);lv_snapshot_free(s);}
 int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t buf[240*20];static lv_disp_draw_buf_t b;lv_disp_draw_buf_init(&b,buf,nullptr,240*20);static lv_disp_drv_t d;lv_disp_drv_init(&d);d.hor_res=240;d.ver_res=320;d.flush_cb=flush;d.draw_buf=&b;lv_disp_drv_register(&d);Ui::begin(command);
- AppState s;assert(!s.settings.ssid[0]&&!s.settings.password[0]&&!s.settings.pairToken[0]);Ui::show(Screen::Network);Ui::update(s);lv_obj_update_layout(lv_scr_act());assert(findLabel(lv_scr_act(),"Nie ustawiono"));
+ AppState s;assert(!s.settings.ssid[0]&&!s.settings.password[0]&&!s.settings.pairToken[0]);Ui::show(Screen::WifiSettings);Ui::update(s);lv_obj_update_layout(lv_scr_act());assert(findLabel(lv_scr_act(),"Nie ustawiono"));
  s.batteryPct=80;s.batteryV=3.98;s.wifi=true;s.rssi=-54;s.wifiLink=WifiLinkState::Connected;strcpy(s.connectedSsid,"ESP32-BABY-CAM");strcpy(s.settings.ssid,s.connectedSsid);s.wifiScan=WifiScanState::Done;s.wifiScanGeneration=1;s.networkCount=5;
  const char*ssids[]={"ESP32-BABY-CAM","Home-24G","Guest","Office-Enterprise","A-very-long-SSID-with-32-letters"};for(int i=0;i<5;i++){snprintf(s.networks[i].ssid,33,"%s",ssids[i]);s.networks[i].rssi=-42-i*10;s.networks[i].security=i==2?WifiSecurity::Open:i==3?WifiSecurity::Unsupported:WifiSecurity::Wpa2;}
- s.bmeOnline=s.scdOnline=s.bmeFresh=s.scdFresh=true;s.temperature=23.4;s.humidity=54;s.co2=742;s.iaq=42;s.pressure=1013.2;s.eco2=608;s.iaqAccuracy=2;s.historyCount=60;s.sd=true;s.sdFree=12ULL*1024*1024*1024;strcpy(s.timeText,"14:26");strcpy(s.dateText,"12.10.2026");strcpy(s.ip,"192.168.4.2");strcpy(s.message,"");
+ s.bmeOnline=s.scdOnline=s.bmeFresh=s.scdFresh=true;s.temperature=23.4;s.humidity=54;s.co2=742;s.iaq=42;s.pressure=1013.2;s.eco2=608;s.iaqAccuracy=2;s.historyCount=60;s.sd=true;s.sdFree=12ULL*1024*1024*1024;strcpy(s.timeText,"14:26");strcpy(s.ip,"192.168.4.2");strcpy(s.message,"");
  for(int m=0;m<6;m++)for(int i=0;i<60;i++)s.history[m][i]=metricValue(s,m)+sin(i*.34f)*(m==2?110:m==1?7:m==3?15:2);
- Ui::update(s);const Screen screens[]={Screen::Home,Screen::Sensors,Screen::Metric,Screen::Settings,Screen::General,Screen::Display,Screen::CameraSettings,Screen::Network,Screen::Scan,Screen::Battery,Screen::System,Screen::Alerts,Screen::Cameras,Screen::Audio,Screen::Live,Screen::Limits,Screen::SensorSettings,Screen::Recordings,Screen::Pair,Screen::WifiNetworks,Screen::Languages,Screen::Colors,Screen::Appearance,Screen::Update,Screen::AudioSettings};
+ s.sensorCount=4;s.nowMs=10000;const char*sensorNames[]={"Salon","Sypialnia","POGO BME688","BTHome bateria"};const int selected[]={0,2,1,6};
+ for(int i=0;i<4;i++){auto&d=s.sensors[i];d.config.source=i==2?SensorRegistry::Source::Bme688:SensorRegistry::Source::Bthome;strcpy(d.config.name,sensorNames[i]);snprintf(d.config.address,18,"aa:bb:cc:dd:ee:%02d",i);d.config.capabilities=i==2?0x3b:0x57;d.config.selected=selected[i];for(int m=0;m<7;m++){d.values[m]=m==6?91:metricValue(s,m);d.updated[m]=10000;}d.historyCount=60;for(int j=0;j<60;j++)d.history[j]=d.values[selected[i]];}
+ s.bleCount=1;auto&advertised=s.bleDevices[0];advertised.config=s.sensors[0].config;strcpy(advertised.config.name,"BLE salon");advertised.rssi=-48;s.bleState=BleState::Done;
+ Ui::update(s);const Screen screens[]={Screen::Home,Screen::Sensors,Screen::Metric,Screen::Settings,Screen::General,Screen::Display,Screen::CameraSettings,Screen::Network,Screen::Scan,Screen::Battery,Screen::System,Screen::Alerts,Screen::Cameras,Screen::Audio,Screen::Live,Screen::Limits,Screen::SensorSettings,Screen::Recordings,Screen::Pair,Screen::WifiNetworks,Screen::Languages,Screen::Colors,Screen::Appearance,Screen::Update,Screen::AudioSettings,Screen::WifiSettings,Screen::Bluetooth,Screen::Direct,Screen::AddSensor,Screen::SensorValue};
  for(int lang=0;lang<3;lang++){s.settings.language=lang;Ui::update(s);for(unsigned i=0;i<sizeof screens/sizeof screens[0];i++){Ui::show(screens[i],0);Ui::update(s);lv_tick_inc(30);lv_timer_handler();char name[512];snprintf(name,sizeof name,"%s/ui_%d_%02d.ppm",argv[1],lang,i);save(name);}
-  const char*settingsNames[]={"Ustawienia","Einstellungen","Settings"};const char*temperatureNames[]={"Temp.","Temp.","Temp."};const char*dimNames[]={"Przygaś po [s]","Dimmen nach [s]","Dim after [s]"};
+  const char*settingsNames[]={"Ustawienia","Einstellungen","Settings"};const char*temperatureNames[]={"Salon","Salon","Salon"};const char*dimNames[]={"Przygaś po [s]","Dimmen nach [s]","Dim after [s]"};
   Ui::show(Screen::Home);Ui::update(s);lv_obj_update_layout(lv_scr_act());assert(findLabel(lv_scr_act(),settingsNames[lang]));
   Ui::show(Screen::Sensors);Ui::update(s);lv_obj_update_layout(lv_scr_act());auto*temperature=findLabel(lv_scr_act(),temperatureNames[lang]);assert(temperature);assert(lv_obj_get_height(temperature)<=lv_obj_get_style_text_font(temperature,LV_PART_MAIN)->line_height);
   Ui::show(Screen::Display);Ui::update(s);lv_obj_update_layout(lv_scr_act());auto*dim=findLabel(lv_scr_act(),dimNames[lang]);auto*value=findLabel(lv_scr_act(),"60");assert(dim&&value);lv_area_t a,b;lv_obj_get_coords(dim,&a);lv_obj_get_coords(value,&b);assert(a.y2<b.y1);
@@ -64,9 +67,9 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  s.theme=ThemeMode::Dark;Ui::update(s);
  // Sensor overview readings update without navigating or rebuilding the page.
  s.settings.language=0;Ui::update(s);Ui::show(Screen::Sensors);Ui::update(s);
- s.temperature=27.1f;s.co2=987;Ui::update(s);assert(findLabel(lv_scr_act(),"27.1")&&findLabel(lv_scr_act(),"987"));
- s.temperature=NAN;Ui::update(s);assert(findLabel(lv_scr_act(),"—"));
- s.temperature=23.4f;s.co2=742;Ui::update(s);
+ s.sensors[0].values[0]=27.1f;s.sensors[1].values[2]=987;Ui::update(s);assert(findLabel(lv_scr_act(),"27.1 °C")&&findLabel(lv_scr_act(),"987 ppm"));
+ s.sensors[0].values[0]=NAN;Ui::update(s);assert(findLabel(lv_scr_act(),"—"));
+ s.sensors[0].values[0]=23.4f;s.sensors[1].values[2]=742;Ui::update(s);
  // Every submenu target, bottom-of-list reachability and sibling spacing in
  // all languages. Home is independently compared pixel-for-pixel by Python.
  for(int lang=0;lang<3;lang++){
@@ -96,12 +99,12 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  assert(sentCount==1&&sent[0].action==Action::Setting&&sent[0].value==Brightness&&!strcmp(sent[0].text,"65"));
  click("Test kolorów");Ui::update(s);assert(Ui::current()==Screen::Colors);puts("Readability: visible slider parts, live percentage and brightness save callback; color-test navigation OK.");
  for(int i=0;i<3;i++){Ui::show(Screen::Languages);sentCount=0;click(choices[i]);assert(sentCount==1&&sent[0].action==Action::Setting&&sent[0].value==Language&&atoi(sent[0].text)==codes[i]);s.settings.language=codes[i];Ui::update(s);assert(Ui::current()==Screen::Languages);}
- s.settings.language=0;Ui::update(s);Ui::show(Screen::Network);sentCount=0;click("Wyszukaj Wi-Fi");assert(sentCount==1&&sent[0].action==Action::WifiScan);Ui::update(s);assert(Ui::current()==Screen::WifiNetworks);
+ s.settings.language=0;Ui::update(s);Ui::show(Screen::Network);sentCount=0;assert(findLabel(lv_scr_act(),"WLAN")&&findLabel(lv_scr_act(),"Bluetooth")&&findLabel(lv_scr_act(),"ESP"));click("WLAN");Ui::update(s);assert(Ui::current()==Screen::WifiSettings&&sentCount==0);click("Wyszukaj Wi-Fi");assert(sentCount==1&&sent[0].action==Action::WifiScan);Ui::update(s);assert(Ui::current()==Screen::WifiNetworks);
  sentCount=0;click("Home-24G");auto*input=findType(lv_scr_act(),&lv_textarea_class);auto*kb=findType(lv_scr_act(),&lv_keyboard_class);assert(input&&kb&&lv_textarea_get_password_mode(input));assert(!strlen(lv_textarea_get_text(input)));
  pressKey(kb,"a");pressKey(kb,"b");pressKey(kb,LV_SYMBOL_BACKSPACE);assert(!strcmp(lv_textarea_get_text(input),"a"));pressKey(kb,"ABC");pressKey(kb,"A");pressKey(kb,"1#");pressKey(kb,"1");assert(!strcmp(lv_textarea_get_text(input),"aA1"));pressKey(kb,"abc");
  lv_textarea_set_text(input,"short");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==0&&findType(lv_scr_act(),&lv_textarea_class));
  clickImage(&img_eye);assert(!lv_textarea_get_password_mode(input));clickImage(&img_eye_off);assert(lv_textarea_get_password_mode(input));
- lv_textarea_set_text(input,"Example-Password");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==4&&sent[0].value==NetworkMode&&!strcmp(sent[0].text,"1")&&sent[1].value==WifiSsid&&!strcmp(sent[1].text,"Home-24G")&&sent[2].value==WifiPassword&&!strcmp(sent[2].text,"Example-Password")&&sent[3].action==Action::Connect);Ui::update(s);assert(Ui::current()==Screen::Network);
+ lv_textarea_set_text(input,"Example-Password");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==4&&sent[0].value==NetworkMode&&!strcmp(sent[0].text,"1")&&sent[1].value==WifiSsid&&!strcmp(sent[1].text,"Home-24G")&&sent[2].value==WifiPassword&&!strcmp(sent[2].text,"Example-Password")&&sent[3].action==Action::Connect);Ui::update(s);assert(Ui::current()==Screen::WifiSettings);
  Ui::show(Screen::WifiNetworks);sentCount=0;click("Home-24G");clickImage(&img_close);assert(sentCount==0);Ui::update(s);
  Ui::show(Screen::WifiNetworks);sentCount=0;click("Home-24G");input=findType(lv_scr_act(),&lv_textarea_class);kb=findType(lv_scr_act(),&lv_keyboard_class);lv_textarea_set_text(input,"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");lv_event_send(kb,LV_EVENT_READY,nullptr);assert(sentCount==0);lv_textarea_set_text(input,"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");pressKey(kb,LV_SYMBOL_OK);assert(sentCount==4&&strlen(sent[2].text)==64);Ui::update(s);
  Ui::show(Screen::WifiNetworks);sentCount=0;click("Guest");assert(sentCount==4&&sent[2].value==WifiPassword&&!strlen(sent[2].text)&&sent[3].action==Action::Connect);Ui::update(s);
@@ -126,6 +129,18 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
  capture=false;puts("Large keyboard: all ASCII, real pointer taps, disabled controls, drag scrolling and reset confirmation OK.");
  const WifiScanState scans[]={WifiScanState::Scanning,WifiScanState::Done,WifiScanState::Failed};const char*scanNames[]={"wifi_scanning","wifi_empty","wifi_error"};
  for(int i=0;i<3;i++){s.wifiScan=scans[i];s.networkCount=0;s.wifiScanGeneration++;Ui::update(s);Ui::show(Screen::WifiNetworks);char name[512];snprintf(name,sizeof name,"%s/%s.ppm",argv[1],scanNames[i]);save(name);}
+ // No measurement choice before registration, then only the added device's
+ // actual capabilities. MAC in commands binds selection to a stable identity.
+ capture=true;s.settings.language=0;AppState saved=s;s.sensorCount=0;s.sensorGeneration++;Ui::update(s);Ui::show(Screen::Sensors);assert(findLabel(lv_scr_act(),"Dodaj sensor")&&!findLabel(lv_scr_act(),"23.4 °C"));click("Dodaj sensor");Ui::update(s);assert(Ui::current()==Screen::AddSensor);click("Bluetooth");Ui::update(s);assert(Ui::current()==Screen::Bluetooth&&!findLabel(lv_scr_act(),"Telefon"));sentCount=0;click("Wyszukaj sensory");assert(sentCount==1&&sent[0].action==Action::BleScan);sentCount=0;click("BLE salon");assert(sentCount==1&&sent[0].action==Action::SensorAdd&&!strcmp(sent[0].text,"aa:bb:cc:dd:ee:00"));
+ s.sensorCount=1;s.sensors[0]=saved.sensors[0];s.sensors[0].config.selected=SensorRegistry::None;s.sensors[0].config.capabilities=3;s.lastAdded=0;s.sensorGeneration++;s.sensorAddedGeneration++;Ui::update(s);assert(Ui::current()==Screen::SensorValue&&findLabel(lv_scr_act(),"Wilgotność")&&!findLabel(lv_scr_act(),"Ciśnienie"));
+ char newName[512];snprintf(newName,sizeof newName,"%s/sensor_choose.ppm",argv[1]);save(newName);sentCount=0;click("Wilgotność");assert(sentCount==1&&sent[0].action==Action::SensorSelect&&sent[0].value==1&&!strcmp(sent[0].text,s.sensors[0].config.address));s.sensors[0].config.selected=1;s.sensorGeneration++;Ui::update(s);assert(Ui::current()==Screen::Sensors&&findLabel(lv_scr_act(),"54 %"));
+ s=saved;Ui::update(s);Ui::show(Screen::Home);Ui::update(s);auto*tiles=findType(lv_scr_act(),&lv_tileview_class);assert(tiles&&lv_obj_get_x(lv_tileview_get_tile_act(tiles))==0);sentCount=0;
+ for(int x=220;x>=20;x-=25)pointerStep(x,175,true);pointerStep(20,175,false);for(int i=0;i<20;i++)pointerStep(20,175,false);Ui::update(s);assert(Ui::current()==Screen::Home&&sentCount==0&&lv_obj_get_x(lv_tileview_get_tile_act(tiles))==240);
+ snprintf(newName,sizeof newName,"%s/home_second.ppm",argv[1]);save(newName);s.sensors[0].values[0]=26.2;Ui::update(s);assert(findLabel(lv_scr_act(),"26.2 °C")&&lv_obj_get_x(lv_tileview_get_tile_act(tiles))==240);
+ s.theme=ThemeMode::Light;Ui::update(s);tiles=findType(lv_scr_act(),&lv_tileview_class);assert(lv_obj_get_x(lv_tileview_get_tile_act(tiles))==240);snprintf(newName,sizeof newName,"%s/light_home_second.ppm",argv[1]);save(newName);
+ for(int x=20;x<=220;x+=25)pointerStep(x,175,true);pointerStep(220,175,false);for(int i=0;i<20;i++)pointerStep(220,175,false);assert(lv_obj_get_x(lv_tileview_get_tile_act(tiles))==0&&sentCount==0);
+ s.theme=ThemeMode::Dark;s.sensors[0].values[0]=23.4;Ui::update(s);Ui::show(Screen::System);click("Software");Ui::update(s);assert(Ui::current()==Screen::Update);tap(23,46);Ui::update(s);assert(Ui::current()==Screen::System);capture=false;
+ puts("Sensors: add-first BLE workflow, capability-bound reading, stable device address, saved cards, real horizontal swipe without click-through, live second page and Software navigation OK.");
  // Actual OTA UI callbacks: check does not install; install requires two clicks
  // bound to the displayed version. Busy states disable controls and back navigation.
  capture=true;
@@ -183,16 +198,17 @@ int main(int argc,char**argv){if(argc!=2)return 1;lv_init();static lv_color_t bu
   s.batteryPower=Battery::Power::External;s.batteryV=4.12f;s.batteryPct=Battery::percentage(s.batteryV);Ui::update(s);a=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);lv_tick_inc(450);Ui::update(s);b=lv_snapshot_take(lv_scr_act(),LV_IMG_CF_TRUE_COLOR);assert(a&&b&&a->header.w==240&&b->header.w==240&&!memcmp(a->data,b->data,240*320*sizeof(lv_color_t)));lv_snapshot_free(a);lv_snapshot_free(b);
   snprintf(n,sizeof n,"%s/battery_external_%d_%d.ppm",argv[1],theme,lang);save(n);lv_obj_update_layout(lv_scr_act());if(scrollBody()&&lv_obj_get_scroll_bottom(scrollBody())>0)fprintf(stderr,"Battery overflow theme=%d lang=%d scroll=%d\n",theme,lang,int(lv_obj_get_scroll_bottom(scrollBody())));assert(scrollBody()&&lv_obj_get_scroll_bottom(scrollBody())<=0);
   s.batteryPct=-1;s.batteryV=NAN;s.batteryPower=Battery::Power::Battery;Ui::update(s);assert(countLabel(lv_scr_act(),"—")==2&&findLabel(lv_scr_act(),"— V"));
-  s.batteryPct=80;s.batteryV=3.98f;Ui::update(s);Ui::show(Screen::Home);Ui::update(s);assert(findLabel(lv_scr_act(),"12.10.2026"));
+  s.batteryPct=80;s.batteryV=3.98f;Ui::update(s);Ui::show(Screen::Home);Ui::update(s);assert(!findLabel(lv_scr_act(),"12.10.2026")&&!findLabel(lv_scr_act(),"Gotowy"));
   Ui::show(Screen::Sensors);Ui::update(s);lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());
-  for(const char*v:{"23.4","54","742","42","1013","608"}){auto*l=findLabel(lv_scr_act(),v);assert(l);lv_area_t area;lv_obj_get_coords(l,&area);assert(area.y1>=72&&area.y2<320);}
-  s.co2=2000;Ui::update(s);assert(findLabel(lv_scr_act(),lang==2?"Alert":"Alarm"));s.co2=742;s.bmeFresh=s.scdFresh=false;Ui::update(s);assert(countLabel(lv_scr_act(),"—")==6);s.bmeFresh=s.scdFresh=true;Ui::update(s);
+  for(const char*v:{"23.4 °C","54 %","742 ppm","91 %"}){auto*l=findLabel(lv_scr_act(),v);assert(l);lv_area_t area;lv_obj_get_coords(l,&area);assert(area.y1>=72&&area.y2<320);}
+  s.nowMs=200000;Ui::update(s);assert(countLabel(lv_scr_act(),"—")==4);s.nowMs=10000;Ui::update(s);
+
  }
  s.theme=ThemeMode::Dark;s.settings.language=0;s.batteryPct=80;s.batteryV=3.98f;s.batteryPower=Battery::Power::Battery;Ui::update(s);
- puts("Battery UI: synchronized percentages, 100% width, animated charging, static powered bolt, invalid values and one-page diagnostics PL/DE/EN. All six sensor readings visible; alerts/offline update live.");
+ puts("Battery UI: synchronized percentages, 100% width, animated charging, static powered bolt, invalid values and one-page diagnostics PL/DE/EN. Saved sensor readings update live and expire individually.");
  // Dashboard, independent audio settings and the real full-screen viewer.
  capture=true;s.settings.language=0;s.theme=ThemeMode::Dark;s.camera=s.audioCap=s.motionCap=s.sd=true;s.playing=s.recording=s.listening=false;Ui::update(s);
- Ui::show(Screen::Sensors);sentCount=0;tap(60,110);Ui::update(s);assert(Ui::current()==Screen::Metric&&findLabel(lv_scr_act(),"Temperatura"));
+ Ui::show(Screen::Sensors);sentCount=0;tap(60,175);Ui::update(s);assert(Ui::current()==Screen::Metric&&findLabel(lv_scr_act(),"Temperatura"));
  Ui::show(Screen::CameraSettings);assert(!findLabel(lv_scr_act(),"Alarm dźwięku")&&!findLabel(lv_scr_act(),"Głośność"));Ui::show(Screen::AudioSettings);assert(findLabel(lv_scr_act(),"Alarm dźwięku")&&findLabel(lv_scr_act(),"Głośność"));
  static uint16_t fixture[Video::pixels];for(int y=0;y<Video::height;y++)for(int x=0;x<Video::width;x++){uint32_t c=x<48?0xb9364b:x>=272?0x386daa:((x/32+y/24)%2?0x8ba79a:0xd1dfce);fixture[y*Video::width+x]=lv_color_hex(c).full;}
  for(int theme=0;theme<2;theme++){s.theme=ThemeSettings::normalize(theme);Ui::update(s);Ui::show(Screen::Live);Ui::frame(fixture);Ui::update(s);lv_obj_update_layout(lv_scr_act());checkTargets(lv_scr_act());assert(!findLabel(lv_scr_act(),"Kamera 1"));

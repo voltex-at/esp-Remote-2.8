@@ -1,6 +1,7 @@
 #include "ota.h"
 #include "board_config.h"
 #include "tls_memory.h"
+#include "sensor_hub.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -110,7 +111,7 @@ void doInstall(){
  if(esp_ota_set_boot_partition(partition)!=ESP_OK){fail(Error::Partition);return;}
  publish(State::Restarting,100);vTaskDelay(pdMS_TO_TICKS(1500));ESP.restart();
 }
-void worker(void*p){if(p)doInstall();else doCheck();portENTER_CRITICAL(&mutex);active=false;portEXIT_CRITICAL(&mutex);vTaskDelete(nullptr);}
+void worker(void*p){if(SensorHub::pause(12000)){if(p)doInstall();else doCheck();}else fail(Error::Busy);portENTER_CRITICAL(&mutex);active=false;portEXIT_CRITICAL(&mutex);SensorHub::resume();vTaskDelete(nullptr);}
 bool start(bool install,const char*version){
  portENTER_CRITICAL(&mutex);if(active||(install&&(shared.state!=State::Available||!version||strcmp(version,candidate.version)))){portEXIT_CRITICAL(&mutex);return false;}
  active=true;shared.state=install?State::Downloading:State::Checking;shared.error=Error::None;shared.progress=0;shared.detail=0;

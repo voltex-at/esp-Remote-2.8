@@ -92,10 +92,11 @@ static void recordAudio(const AppState&s,const int16_t*pcm){
 // Fixed packet: 4-byte magic BAP1, seq u32 LE, 64-byte token (NUL padded), 256 x PCM s16 LE.
 void audioTask(void*){
  if(!audioMutex){vTaskDelete(nullptr);return;}
+ AppState*local=allocateStateCopy();if(!local){message("Brak PSRAM dla audio");vTaskDelete(nullptr);return;}AppState&status=*local;
  WiFiUDP udp;udp.begin(AUDIO_UDP_PORT);uint8_t packet[584]={};memcpy(packet,"BAP1",4);uint32_t seq=0,heartbeat=0;
  int16_t stereo[512],mono[256];IPAddress peer;
  for(;;){
- AppState status=snapshot();if(wav&&(!status.recording||strcmp(wavPath,status.clipPath)))closeWav();
+ copyState(status);if(wav&&(!status.recording||strcmp(wavPath,status.clipPath)))closeWav();
  bool listen,talk;char host[64],token[65];{Guard g(audioMutex);listen=audioListen;talk=audioTalk;strlcpy(host,peerHost,sizeof host);strlcpy(token,peerToken,sizeof token);}
  bool active=audioOk&&(listen||talk)&&WiFi.isConnected()&&(peer.fromString(host)||WiFi.hostByName(host,peer)==1);
  digitalWrite(Pins::ampEnable,active&&listen&&!talk?LOW:HIGH);

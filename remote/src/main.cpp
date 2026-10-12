@@ -3,6 +3,7 @@
 #include "wifi_networks.h"
 #include "ota.h"
 #include "tls_memory.h"
+#include "sensor_hub.h"
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <esp_heap_caps.h>
@@ -14,7 +15,7 @@ AppState state;
 SemaphoreHandle_t stateMutex,i2cMutex,sdMutex,frameMutex;
 QueueHandle_t commands,mediaCommands;
 uint16_t* videoPixels=nullptr;bool videoDirty=false;
-static Preferences config;static bool ready=false;
+static Preferences config;static bool ready=false;static AppState*uiState=nullptr;
 static QueueHandle_t networkCommands;
 // Retained across software/panic/watchdog resets, without writing flash.
 // A video cannot distinguish a watchdog, a panic and a supply brownout;
@@ -36,7 +37,8 @@ static const char*resetName(esp_reset_reason_t r){switch(r){
  case ESP_RST_SDIO:return "SDIO";default:return "unknown";
 }}
 static void stage(BootStage s){retainedStage=s;retainedMagic=BOOT_TRACE_MAGIC;Serial.printf("[BOOT STAGE] %s ms=%lu internal=%u stack=%u\n",stageName(s),(unsigned long)millis(),ESP.getFreeHeap(),(unsigned)uxTaskGetStackHighWaterMark(nullptr));}
-AppState snapshot(){Guard g(stateMutex);return state;}
+void copyState(AppState&copy){Guard g(stateMutex);copy=state;}
+AppState*allocateStateCopy(){void*p=ps_malloc(sizeof(AppState));return p?new(p)AppState:nullptr;}
 void message(const char*t){Guard g(stateMutex);strlcpy(state.message,t,sizeof state.message);}
 void alert(const char*t){
  {Guard g(stateMutex);if(state.alertCount<ALERT_COUNT)state.alertCount++;for(int i=ALERT_COUNT-1;i>0;i--)strlcpy(state.alerts[i],state.alerts[i-1],96);snprintf(state.alerts[0],96,"%s  %s",state.timeText,t);if(state.settings.notifications)strlcpy(state.message,t,sizeof state.message);}
@@ -61,7 +63,7 @@ static void apply(int key,const char*text,int value){
  case Brightness:s.brightness=constrain(value,5,100);break;case Timeout:s.timeoutSec=constrain(value,15,600);break;case Language:s.language=constrain(value,0,2);break;case LogInterval:s.logIntervalSec=constrain(value,5,300);break;case Logging:s.logging=value;break;case Notifications:s.notifications=value;break;case Volume:s.volume=constrain(value,0,100);break;case NetworkMode:s.networkMode=value?1:0;if(!s.networkMode)strlcpy(s.cameraHost,"192.168.4.1",sizeof s.cameraHost);break;
  case WifiSsid:strlcpy(s.ssid,text,sizeof s.ssid);break;case WifiPassword:strlcpy(s.password,text,sizeof s.password);break;case CameraHost:if(strstr(text,"://")||strchr(text,'/')){strlcpy(state.message,"Podaj tylko IP lub nazwe hosta",sizeof state.message);return;}strlcpy(s.cameraHost,text,sizeof s.cameraHost);break;case PairToken:if(strlen(text)>63){strlcpy(state.message,"Token: maksymalnie 63 znaki",sizeof state.message);return;}strlcpy(s.pairToken,text,sizeof s.pairToken);break;
  case TempMin:s.tempMin=value;break;case TempMax:s.tempMax=value;break;case HumidityMin:s.humidityMin=constrain(value,0,100);break;case HumidityMax:s.humidityMax=constrain(value,0,100);break;case Co2Max:s.co2Max=constrain(value,400,5000);break;case IaqMax:s.iaqMax=constrain(value,25,500);break;
- }}save();Board::brightness(snapshot().settings.brightness);
+ }}save();uint8_t brightness;{Guard g(stateMutex);brightness=state.settings.brightness;}Board::brightness(brightness);
 }
 static WifiSecurity security(wifi_auth_mode_t auth){switch(auth){
  case WIFI_AUTH_OPEN:return WifiSecurity::Open;
@@ -142,10 +144,11 @@ void setup(){
  if(!TlsMemory::begin()){Board::bootError("TLS allocator init failed","Check PSRAM / USB log");return;}
  stage(BootStage::Lvgl);Board::bootStatus("LVGL startup","RGB565 / native portrait");lv_init();if(!Board::begin()){Board::bootError("LVGL display allocation failed","Read the USB startup log");return;}
  videoPixels=(uint16_t*)ps_calloc(Video::pixels,sizeof(uint16_t));if(!videoPixels){message("Wymagana PSRAM OPI 8MB");}
- Ui::begin(dispatch);Ui::update(snapshot());Board::brightness(snapshot().settings.brightness);lv_refr_now(nullptr);
+ uiState=allocateStateCopy();if(!uiState){Board::bootError("PSRAM allocation failed","UI state buffer");return;}copyState(*uiState);Ui::begin(dispatch);Ui::update(*uiState);Board::brightness(uiState->settings.brightness);lv_refr_now(nullptr);
  stage(BootStage::Sd);bool sd=Storage::begin();{Guard g(stateMutex);state.sd=sd;}
  stage(BootStage::Audio);bool audio=Board::audioBegin();Serial.printf("[BOOT] SD=%d audio=%d\n",sd,audio);
  stage(BootStage::Sensors);bool tasks=xTaskCreatePinnedToCore(Sensors::task,"sensors",16000,nullptr,2,nullptr,0)==pdPASS;
+ tasks=SensorHub::begin()&&(xTaskCreatePinnedToCore(SensorHub::task,"sensor-hub",12000,nullptr,1,nullptr,0)==pdPASS)&&tasks;
  stage(BootStage::Network);tasks=(xTaskCreatePinnedToCore(networkTask,"network",16000,nullptr,1,nullptr,0)==pdPASS)&&tasks;
  stage(BootStage::Media);if(videoPixels)tasks=(xTaskCreatePinnedToCore(Media::task,"media",16000,nullptr,1,nullptr,0)==pdPASS)&&tasks;
  stage(BootStage::AudioTask);tasks=(xTaskCreatePinnedToCore(Board::audioTask,"audio",12000,nullptr,3,nullptr,0)==pdPASS)&&tasks;
@@ -162,23 +165,24 @@ void loop(){
  if(Ota::installing())continue;
  switch(c.action){
  case Action::OtaCheck:case Action::OtaInstall:{
-  auto s=snapshot();if(s.recording||s.playing||s.listening||s.talking||s.wifiScan==WifiScanState::Scanning){Ota::reject(Ota::Error::Busy);break;}
-  if(c.action==Action::OtaInstall&&s.batteryPct>=0&&s.batteryPct<=15){Ota::reject(Ota::Error::Battery);break;}
+  bool busy,low;{Guard g(stateMutex);busy=state.recording||state.playing||state.listening||state.talking||state.wifiScan==WifiScanState::Scanning;low=state.batteryPct>=0&&state.batteryPct<=15;}if(busy){Ota::reject(Ota::Error::Busy);break;}
+  if(c.action==Action::OtaInstall&&low){Ota::reject(Ota::Error::Battery);break;}
   if(c.action==Action::OtaCheck)Ota::check();else Ota::install(c.text);break;
  }
  case Action::Setting:apply(c.value,c.text,atoi(c.text));saveDue=now;break;
  case Action::Scan:Sensors::scan();break;
+ case Action::BleScan:case Action::SensorAdd:case Action::SensorSelect:case Action::SensorRemove:SensorHub::command(c);break;
  case Action::Connect:case Action::WifiScan:if(xQueueSend(networkCommands,&c,0)!=pdTRUE)message("Kolejka Wi-Fi pelna");break;
- case Action::Reset:config.clear();{Guard g(stateMutex);state.settings=Settings();state.theme=ThemeMode::Dark;}save();ESP.restart();break;
+ case Action::Reset:if(!SensorHub::reset()){message("Nie udalo sie usunac sensorow. Sprobuj ponownie.");break;}config.clear();{Guard g(stateMutex);state.settings=Settings();state.theme=ThemeMode::Dark;}save();ESP.restart();break;
  case Action::ClearAlerts:{Guard g(stateMutex);state.alertCount=0;}break;
  case Action::Reboot:ESP.restart();break;
  default:if(xQueueSend(mediaCommands,&c,0)!=pdTRUE)message("Kolejka kamery pelna");break;
  }}(void)saveDue;
  if(now-batteryTick>=500){batteryTick=now;Board::battery();}
- if(now-housekeepingTick>=2000){housekeepingTick=now;struct tm tm;if(getLocalTime(&tm,0)){Guard g(stateMutex);strftime(state.timeText,sizeof state.timeText,"%H:%M",&tm);strftime(state.dateText,sizeof state.dateText,"%d.%m.%Y",&tm);} uint64_t freeBytes=0;{Guard sd(sdMutex);if(snapshot().sd){uint64_t total=SD_MMC.totalBytes(),used=SD_MMC.usedBytes();freeBytes=total>=used?total-used:0;}}{Guard g(stateMutex);state.uptime=now/1000;state.sdFree=freeBytes;}}
- if(now-uiTick>=200){uiTick=now;{Guard g(stateMutex);state.ota=Ota::status();}Ui::update(snapshot());if(videoPixels&&xSemaphoreTake(frameMutex,0)==pdTRUE){if(videoDirty){Ui::frame(videoPixels);videoDirty=false;}xSemaphoreGive(frameMutex);}}
- uint32_t idle=lv_disp_get_inactive_time(nullptr);Settings s=snapshot().settings;
- static bool dark=false;bool shouldDark=idle>(uint32_t)s.timeoutSec*1000&&!snapshot().talking&&!Ota::busy();
+ if(now-housekeepingTick>=2000){housekeepingTick=now;struct tm tm;if(getLocalTime(&tm,0)){Guard g(stateMutex);strftime(state.timeText,sizeof state.timeText,"%H:%M",&tm);} bool mounted;{Guard g(stateMutex);mounted=state.sd;}uint64_t freeBytes=0;{Guard sd(sdMutex);if(mounted){uint64_t total=SD_MMC.totalBytes(),used=SD_MMC.usedBytes();freeBytes=total>=used?total-used:0;}}{Guard g(stateMutex);state.uptime=now/1000;state.sdFree=freeBytes;}}
+ if(now-uiTick>=200){uiTick=now;{Guard g(stateMutex);state.ota=Ota::status();}copyState(*uiState);Ui::update(*uiState);if(videoPixels&&xSemaphoreTake(frameMutex,0)==pdTRUE){if(videoDirty){Ui::frame(videoPixels);videoDirty=false;}xSemaphoreGive(frameMutex);}}
+ uint32_t idle=lv_disp_get_inactive_time(nullptr);Settings s=networkSettings();bool talking;{Guard g(stateMutex);talking=state.talking;}
+ static bool dark=false;bool shouldDark=idle>(uint32_t)s.timeoutSec*1000&&!talking&&!Ota::busy();
  if(shouldDark!=dark){dark=shouldDark;Board::brightness(dark?5:s.brightness);}
  lv_timer_handler();delay(5);
  static uint32_t healthTick=0;if(now-healthTick>=10000){healthTick=now;
