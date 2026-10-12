@@ -31,5 +31,6 @@ extern const lv_img_dsc_t img_plus;
 extern const lv_img_dsc_t img_power;
 extern const lv_img_dsc_t img_globe;
 extern const lv_img_dsc_t img_mountains;
+extern const lv_img_dsc_t img_mountains_light;
 extern const lv_img_dsc_t img_module;
 }

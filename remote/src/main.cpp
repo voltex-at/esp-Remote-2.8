@@ -47,9 +47,9 @@ static void load(){config.begin("remote-v1",false);Settings defaults;Settings s=
  // Versioned POD blob, no sensitive values printed to serial.
  if(config.getUInt("schema",0)==1&&config.getBytesLength("settings")==sizeof s)config.getBytes("settings",&s,sizeof s);
  s.ssid[32]=0;s.password[64]=0;s.cameraHost[63]=0;s.pairToken[64]=0;s.brightness=constrain(s.brightness,5,100);s.language=constrain(s.language,0,2);s.volume=constrain(s.volume,0,100);s.timeoutSec=constrain(s.timeoutSec,15,600);s.logIntervalSec=constrain(s.logIntervalSec,5,300);
- Guard g(stateMutex);state.settings=s;
+ Guard g(stateMutex);state.settings=s;state.theme=ThemeSettings::load(config);
 }
-static void save(){Settings s=snapshot().settings;config.putBytes("settings",&s,sizeof s);config.putUInt("schema",1);}
+static void save(){Settings s;ThemeMode theme;{Guard g(stateMutex);s=state.settings;theme=state.theme;}config.putBytes("settings",&s,sizeof s);config.putUInt("schema",1);if(!ThemeSettings::save(config,theme))message("Nie udalo sie zapisac wygladu");}
 static Settings networkSettings(){Guard g(stateMutex);return state.settings;}
 static bool connect(){Settings s=networkSettings();WiFi.disconnect();WiFi.mode(WIFI_STA);WiFi.setSleep(false);WiFi.setAutoReconnect(true);
  if(!s.ssid[0]){Guard g(stateMutex);state.wifiLink=WifiLinkState::Offline;return false;}
@@ -57,6 +57,7 @@ static bool connect(){Settings s=networkSettings();WiFi.disconnect();WiFi.mode(W
  {Guard g(stateMutex);state.wifiLink=WifiLinkState::Connecting;}return true;}
 static void apply(int key,const char*text,int value){
  {Guard g(stateMutex);auto&s=state.settings;switch(key){
+ case Appearance:state.theme=ThemeSettings::normalize(value);break;
  case Brightness:s.brightness=constrain(value,5,100);break;case Timeout:s.timeoutSec=constrain(value,15,600);break;case Language:s.language=constrain(value,0,2);break;case LogInterval:s.logIntervalSec=constrain(value,5,300);break;case Logging:s.logging=value;break;case Notifications:s.notifications=value;break;case Volume:s.volume=constrain(value,0,100);break;case NetworkMode:s.networkMode=value?1:0;if(!s.networkMode)strlcpy(s.cameraHost,"192.168.4.1",sizeof s.cameraHost);break;
  case WifiSsid:strlcpy(s.ssid,text,sizeof s.ssid);break;case WifiPassword:strlcpy(s.password,text,sizeof s.password);break;case CameraHost:if(strstr(text,"://")||strchr(text,'/')){strlcpy(state.message,"Podaj tylko IP lub nazwe hosta",sizeof state.message);return;}strlcpy(s.cameraHost,text,sizeof s.cameraHost);break;case PairToken:if(strlen(text)>63){strlcpy(state.message,"Token: maksymalnie 63 znaki",sizeof state.message);return;}strlcpy(s.pairToken,text,sizeof s.pairToken);break;
  case TempMin:s.tempMin=value;break;case TempMax:s.tempMax=value;break;case HumidityMin:s.humidityMin=constrain(value,0,100);break;case HumidityMax:s.humidityMax=constrain(value,0,100);break;case Co2Max:s.co2Max=constrain(value,400,5000);break;case IaqMax:s.iaqMax=constrain(value,25,500);break;
@@ -168,7 +169,7 @@ void loop(){
  case Action::Setting:apply(c.value,c.text,atoi(c.text));saveDue=now;break;
  case Action::Scan:Sensors::scan();break;
  case Action::Connect:case Action::WifiScan:if(xQueueSend(networkCommands,&c,0)!=pdTRUE)message("Kolejka Wi-Fi pelna");break;
- case Action::Reset:config.clear();{Guard g(stateMutex);state.settings=Settings();}save();ESP.restart();break;
+ case Action::Reset:config.clear();{Guard g(stateMutex);state.settings=Settings();state.theme=ThemeMode::Dark;}save();ESP.restart();break;
  case Action::ClearAlerts:{Guard g(stateMutex);state.alertCount=0;}break;
  case Action::Reboot:ESP.restart();break;
  default:if(xQueueSend(mediaCommands,&c,0)!=pdTRUE)message("Kolejka kamery pelna");break;

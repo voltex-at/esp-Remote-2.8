@@ -5,6 +5,11 @@ Wi-Fi z wyszukiwaniem sieci i klawiaturą hasła, języki polski/niemiecki/angie
 sensory BME688/BSEC2 i SCD41 przez I²C/pogo, ESP-CAM przez router lub Direct,
 karta SD przeznaczona na nagrania i logi. Nie zmieniono schematu ustawień V1.2.
 
+V1.3.7 dodaje **Ustawienia → Wygląd → Jasny / Ciemny**. Motyw zmienia się od razu
+i zostaje po restarcie. Jasny wariant obejmuje wszystkie ekrany i klawiaturę.
+Wybór jest zapisany osobno od dotychczasowych ustawień; aktualizacja zachowuje Wi-Fi
+oraz konfigurację kamery. [Opis i podgląd obu motywów](docs/LIGHT_DARK_V1_3_7.md).
+
 V1.3.6 odświeża wygląd podstron: płaskie grafitowe karty bez jasnych obramowań,
 lżejsze opisy 18 px, prostsze teksty PL/DE/EN i aktualne odczyty sensorów na liście.
 Strona główna pozostaje identyczna. Zachowano duże pola dotykowe i poprawkę TLS.
@@ -50,5 +55,5 @@ Istniejące wydania nie są nadpisywane. Każdy commit nie oznacza nowego wydani
 Pełna dokumentacja sprzętu i funkcji: [README_PL.md](README_PL.md).
 OTA: [docs/OTA.md](docs/OTA.md). Diagnostyka LCD: [docs/LCD_FIX_V1_2.md](docs/LCD_FIX_V1_2.md).
 
-V1.3.6 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
+V1.3.7 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
 działania LCD, sensorów, radia ani aktualizacji przy zaniku zasilania.

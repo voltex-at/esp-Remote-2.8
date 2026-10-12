@@ -1,0 +1,30 @@
+#pragma once
+#include "theme_settings.h"
+#include <stdint.h>
+
+namespace UiColors {
+struct Palette {
+    uint32_t background, card, border, text, muted, accent, error, blue;
+    uint32_t selected, pressed, buttonPressed, accentPressed, disabled;
+    uint32_t track, knob, accentInk, errorInk, knobDisabled;
+    uint32_t key, keyPressed, inactiveDot;
+};
+inline Palette get(ThemeMode mode, bool home) {
+    if (mode == ThemeMode::Light) {
+        return {0xf3f5f8,0xffffff,0xcbd5df,0x17212e,0x4b5b6f,0x266d22,0xb92743,0x176ca7,
+                0xe5f2dc,0xe0e7ee,0xe0e7ee,0x1d561a,0xe6ebf0,
+                0xc3cbd5,0xffffff,0xffffff,0xffffff,0x8898a8,
+                0xe4eaf1,0xd3dfd9,0xb6c1cc};
+    }
+    if (home) {
+        return {0x000000,0x181c20,0x52606a,0xffffff,0xcbd3da,0x9aff32,0xff4258,0x2ebfff,
+                0x202e20,0x2b333d,0x2b3c27,0x77ce1e,0x181c20,
+                0x53616c,0xffffff,0x000000,0x000000,0x9aa6ae,
+                0x222a34,0x24372b,0x3b4850};
+    }
+    return {0x080b0f,0x181d23,0x333e49,0xf7f9fc,0xb2becb,0xa4f84e,0xff6878,0x68caff,
+            0x202e20,0x2b333d,0x2b3c27,0x77ce1e,0x181d23,
+            0x53616c,0xf7f9fc,0x080b0f,0x080b0f,0x9aa6ae,
+            0x222a34,0x24372b,0x3b4850};
+}
+}

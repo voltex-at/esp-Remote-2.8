@@ -63,6 +63,7 @@ for name,s,w,h in items:
  source.append(f'const lv_img_dsc_t img_{name}={{{{LV_IMG_CF_TRUE_COLOR_ALPHA,0,0,{w},{h}}},{len(data)},data_{name}}};')
  header.append(f'extern const lv_img_dsc_t img_{name};')
 header.append('}')
+header.insert(-1, 'extern const lv_img_dsc_t img_mountains_light;')
 (ROOT/'remote/include/assets.h').write_text('\n'.join(header)+'\n')
 (ROOT/'remote/src/assets.cpp').write_text('\n'.join(source)+'\n')
 print('Generated',len(items),'original assets.')

@@ -29,6 +29,8 @@ jobs:
           /tmp/ota_test
           g++ -std=c++11 -fsanitize=address,undefined -I tests/tls_stub -I remote/include tests/tls_memory_test.cpp remote/src/tls_memory.cpp -o /tmp/tls_memory_test
           /tmp/tls_memory_test
+          g++ -std=c++11 -I remote/include tests/theme_settings_test.cpp -o /tmp/theme_test
+          /tmp/theme_test
           g++ -std=c++17 -I remote/include tests/portrait_test.cpp -o /tmp/portrait_test
           /tmp/portrait_test
           g++ -std=c++17 -I tests/display_stub -I remote/include tests/display_transport_test.cpp remote/src/portrait_display.cpp -o /tmp/lcd_test

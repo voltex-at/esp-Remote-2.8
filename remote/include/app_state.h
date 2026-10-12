@@ -3,13 +3,14 @@
 #include <stddef.h>
 #include <math.h>
 #include "ota_policy.h"
-enum class Screen:uint8_t { Home,Cameras,Live,Sensors,Metric,Settings,General,Display,Network,Pair,Alerts,Audio,CameraSettings,SensorSettings,Scan,Recordings,Battery,System,Limits,WifiNetworks,Languages,Update,Colors };
+#include "theme_settings.h"
+enum class Screen:uint8_t { Home,Cameras,Live,Sensors,Metric,Settings,General,Display,Network,Pair,Alerts,Audio,CameraSettings,SensorSettings,Scan,Recordings,Battery,System,Limits,WifiNetworks,Languages,Update,Colors,Appearance };
 enum class Action:uint8_t { Setting,Scan,Connect,Snapshot,Record,Listen,Talk,CameraControl,LoadFiles,Play,Reset,ClearAlerts,Reboot,WifiScan,OtaCheck,OtaInstall };
 enum class WifiScanState:uint8_t { Idle,Scanning,Done,Failed };
 enum class WifiLinkState:uint8_t { Offline,Connecting,Connected,Failed };
 enum class WifiSecurity:uint8_t { Open,Wpa,Wpa2,Wpa3,WpaWpa2,Wpa2Wpa3,Unsupported };
 struct WifiNetwork { char ssid[33]={};int16_t rssi=-127;WifiSecurity security=WifiSecurity::Open;uint8_t channel=0; };
-enum SettingKey:uint8_t { Brightness,Timeout,Language,LogInterval,Logging,Notifications,Volume,NetworkMode,WifiSsid,WifiPassword,CameraHost,PairToken,TempMin,TempMax,HumidityMin,HumidityMax,Co2Max,IaqMax };
+enum SettingKey:uint8_t { Brightness,Timeout,Language,LogInterval,Logging,Notifications,Volume,NetworkMode,WifiSsid,WifiPassword,CameraHost,PairToken,TempMin,TempMax,HumidityMin,HumidityMax,Co2Max,IaqMax,Appearance };
 struct Settings {
  uint8_t brightness=80,language=0,volume=65,networkMode=0;
  uint16_t timeoutSec=60,logIntervalSec=10;
@@ -25,6 +26,7 @@ static_assert(sizeof(Settings)==264&&offsetof(Settings,ssid)==36&&offsetof(Setti
 constexpr int METRIC_COUNT=6,HISTORY_COUNT=60,FILE_COUNT=12,ALERT_COUNT=8,WIFI_NETWORK_COUNT=16;
 struct AppState {
  Settings settings;
+ ThemeMode theme=ThemeMode::Dark;
  Ota::Status ota;
  float temperature=NAN,humidity=NAN,co2=NAN,iaq=NAN,pressure=NAN,eco2=NAN,voc=NAN;
  float scdTemperature=NAN,scdHumidity=NAN;
