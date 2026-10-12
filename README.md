@@ -5,22 +5,14 @@ Wi-Fi z wyszukiwaniem sieci i klawiaturą hasła, języki polski/niemiecki/angie
 sensory BME688/BSEC2 i SCD41 przez I²C/pogo, ESP-CAM przez router lub Direct,
 karta SD przeznaczona na nagrania i logi. Nie zmieniono schematu ustawień V1.2.
 
+V1.3.6 odświeża wygląd podstron: płaskie grafitowe karty bez jasnych obramowań,
+lżejsze opisy 18 px, prostsze teksty PL/DE/EN i aktualne odczyty sensorów na liście.
+Strona główna pozostaje identyczna. Zachowano duże pola dotykowe i poprawkę TLS.
+[Opis i rzeczywisty podgląd LVGL](docs/MODERN_UI_V1_3_6.md).
+
 V1.3.5 naprawia alokację pamięci TLS dla błędu **32512 / 0x7F00**: duże bufory
-preferują PSRAM, z zapasową pulą i diagnostyką RAM. Zachowano większy interfejs.
-[Opis i instrukcja jednorazowego USB](docs/TLS_MEMORY_V1_3_5.md).
-
-V1.3.4 powiększa napisy i pola dotykowe na podstronach; strona główna pozostaje
-identyczna. Wiersze minimum 64 px, tekst 20/18 px, większe przyciski, aktywny cały
-wiersz przełącznika i klawiatura z dużymi klawiszami na stronach.
-[Opis i podgląd](docs/LARGE_TOUCH_V1_3_4.md).
-
-V1.3.3 aktualizuje zestaw certyfikatów dla HTTPS OTA, rozróżnia błędy DNS/TLS/HTTP
-i pokazuje kod TLS. [Opis naprawy i jednorazowej instalacji USB](docs/OTA_FIX_V1_3_3.md).
-
-V1.3.2 zwiększa kontrast, rozmiar i grubość tekstu oraz ikon. Nazwy i wartości ustawień
-są rozdzielone; suwaki jasności/głośności są widoczne i pokazują procent. Dodano
-**Wyświetlacz → Test kolorów**. [Opis i podgląd](docs/READABILITY_V1_3_2.md).
-Zachowano szybką ścieżkę LCD i diagnostykę resetu z [V1.3.1](docs/LCD_FIX_V1_3_1.md).
+preferują PSRAM, z zapasową pulą i diagnostyką RAM.
+[Opis i instrukcja jednorazowego USB dla V1.3.1–V1.3.4](docs/TLS_MEMORY_V1_3_5.md).
 
 ## Instalacja i OTA
 
@@ -34,7 +26,7 @@ Zachowano szybką ścieżkę LCD i diagnostykę resetu z [V1.3.1](docs/LCD_FIX_V
 | `PILOT_LCD_TEST_APP.bin` | Niezależny test LCD/dotyku przez USB pod `0x10000` |
 | `ota.json` | Wersja, sprzęt docelowy, rozmiar i SHA-256 aplikacji |
 
-Na pilocie: **Ustawienia → System → Aktualizacja OTA → Sprawdź aktualizacje → Zainstaluj → Potwierdź instalację**.
+Na pilocie: **Ustawienia → System → Aktualizacja → Sprawdź → Aktualizuj → Potwierdź**.
 Połącz pilot z routerem z dostępem do internetu i poczekaj na ustawienie czasu NTP.
 Zatrzymaj nagrywanie/odtwarzanie, audio i skan Wi-Fi przed aktualizacją.
 Sprawdzenie wersji ani połączenie Wi-Fi nie rozpoczyna instalacji automatycznie.
@@ -58,5 +50,5 @@ Istniejące wydania nie są nadpisywane. Każdy commit nie oznacza nowego wydani
 Pełna dokumentacja sprzętu i funkcji: [README_PL.md](README_PL.md).
 OTA: [docs/OTA.md](docs/OTA.md). Diagnostyka LCD: [docs/LCD_FIX_V1_2.md](docs/LCD_FIX_V1_2.md).
 
-V1.3.5 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
+V1.3.6 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
 działania LCD, sensorów, radia ani aktualizacji przy zaniku zasilania.
