@@ -22,9 +22,9 @@ def metadata(app, version):
     return dict(schema=1, target=TARGET, version=version, size=len(app),
                 sha256=hashlib.sha256(app).hexdigest(),
                 url=f'https://github.com/{REPOSITORY}/releases/download/v{version}/firmware.bin',
-                notes={'pl':'Pełny ekran kamery obraca interfejs i dotyk do poziomu. Poprawiony brak obrazu, rozdzielone przyciski. Wyrównane Wi-Fi, bateria i procenty; poprawione segmenty oraz miejsce na piorun.',
-                       'de':'Kamera-Vollbild dreht Anzeige und Touch ins Querformat. Klarer Offline-Bildschirm, getrennte Tasten. WLAN, Akku und Prozent ausgerichtet; Segmente und Blitz korrigiert.',
-                       'en':'Camera fullscreen rotates display and touch to landscape. Clear offline view and separated controls. Aligned Wi-Fi, battery and percentages, corrected segments and bolt spacing.'})
+                notes={'pl':'Świetliki LED: czerwony start, zielona gotowość, wybór koloru RGB i jasności. Wybrany sensor CO2: zielony / od 1200 ppm pomarańczowy / od 1500 czerwony. Brak danych: niebieski.',
+                       'de':'LED-Licht: roter Start, grün bereit, RGB-Farbe und Helligkeit. CO2-Sensor wählen: grün / ab 1200 ppm orange / ab 1500 rot. Keine Daten: blaues Blinken.',
+                       'en':'LED light pipes: red startup, green ready, custom RGB and brightness. Select CO2 sensor: green / orange from 1200 ppm / red from 1500. Missing data: blue blink.'})
 
 
 def main():
@@ -39,7 +39,7 @@ def main():
     (out/'ota.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     for name in ('PILOT_LCD_TEST_APP.bin','PILOT_LCD_TEST_FULL.bin'):
         shutil.copy2(ROOT/'firmware'/name,out/name)
-    (out/'notes.md').write_text(f'ESP Remote v{version}\n\n'+(ROOT/'docs/CAMERA_ORIENTATION_V1_3_11.md').read_text())
+    (out/'notes.md').write_text(f'ESP Remote v{version}\n\n'+(ROOT/'docs/LED_LIGHT_PIPES_V1_3_12.md').read_text())
     checks=[]
     for path in sorted(out.iterdir()):
         if path.suffix in ('.bin','.json'):

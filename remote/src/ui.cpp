@@ -18,6 +18,9 @@ static void deviceCard(lv_obj_t*,int,int,int,int,int);
 static const char*bleErrorText();
 static lv_obj_t *batteryStatus=nullptr;
 static Screen connectionBack=Screen::Home,wifiListBack=Screen::WifiSettings,pairBack=Screen::WifiSettings,bluetoothBack=Screen::AddSensor;
+static Screen ledBack=Screen::Settings;static uint32_t ledDraft=0;
+static lv_obj_t *ledPreview=nullptr,*ledHex=nullptr,*ledStatus=nullptr,*ledSignal=nullptr;
+static void refreshLedPreview();
 struct BatteryIcon {lv_obj_t *holder=nullptr,*shell=nullptr,*cap=nullptr,*bars[4]={},*bolt=nullptr;};static BatteryIcon topBattery,detailBattery;
 static lv_chart_series_t*series;static lv_color_t*imageBuf=nullptr;
 static bool frameReady=false,liveFullscreen=false,hudVisible=true,volumeOpen=false;
@@ -148,7 +151,7 @@ static void joinNetwork(int index){if(index<0||index>=data.networkCount)return;a
  lv_label_set_text(editorHint,joinSsid);lv_label_set_long_mode(editorHint,LV_LABEL_LONG_SCROLL_CIRCULAR);
 }
 static void event(lv_event_t*e){auto*b=(Binding*)lv_event_get_user_data(e);auto code=lv_event_get_code(e);auto*o=lv_event_get_target(e);
- if(b->kind==0&&code==LV_EVENT_CLICKED&&!Ota::installing(data.ota.state)){if(b->screen==Screen::Appearance)appearanceBack=page;if(b->screen==Screen::CameraSettings)cameraSettingsBack=page;if(b->screen==Screen::Network&&(page==Screen::Home||page==Screen::Settings||page==Screen::Live))connectionBack=page;if(b->screen==Screen::Pair)pairBack=page;if(b->screen==Screen::Bluetooth)bluetoothBack=page;next(b->screen,b->key);}
+ if(b->kind==0&&code==LV_EVENT_CLICKED&&!Ota::installing(data.ota.state)){if(b->screen==Screen::Appearance)appearanceBack=page;if(b->screen==Screen::CameraSettings)cameraSettingsBack=page;if(b->screen==Screen::Network&&(page==Screen::Home||page==Screen::Settings||page==Screen::Live))connectionBack=page;if(b->screen==Screen::Pair)pairBack=page;if(b->screen==Screen::Bluetooth)bluetoothBack=page;if(b->screen==Screen::Led&&(page==Screen::Settings||page==Screen::Display||page==Screen::SensorSettings))ledBack=page;next(b->screen,b->key);}
  if(b->kind==1&&code==LV_EVENT_VALUE_CHANGED){char n[16];snprintf(n,sizeof n,"%d",lv_obj_has_state(o,LV_STATE_CHECKED));send(Action::Setting,b->key,n);}
  if(b->kind==2&&code==LV_EVENT_CLICKED)send(b->action,b->key,b->text);
  if(b->kind==3&&code==LV_EVENT_VALUE_CHANGED)send(Action::CameraControl,lv_obj_has_state(o,LV_STATE_CHECKED),b->text);
@@ -180,6 +183,13 @@ static void event(lv_event_t*e){auto*b=(Binding*)lv_event_get_user_data(e);auto 
 
  if(b->kind==16&&code==LV_EVENT_CLICKED){liveFullscreen=!liveFullscreen;hudVisible=!liveFullscreen||!frameReady||!(data.camera||data.playing);next(Screen::Live);}
  if(b->kind==17&&code==LV_EVENT_CLICKED)openVolume();
+ if(b->kind==21&&code==LV_EVENT_CLICKED){char n[4];snprintf(n,sizeof n,"%d",b->key);send(Action::Setting,LedMode,n);}
+ if(b->kind==22){
+  if(code==LV_EVENT_VALUE_CHANGED){unsigned shift=(2-b->key)*8;ledDraft=(ledDraft&~(0xffu<<shift))|(uint32_t(lv_slider_get_value(o))<<shift);refreshLedPreview();}
+  if(code==LV_EVENT_RELEASED){char hex[10];snprintf(hex,sizeof hex,"%06lx",(unsigned long)(ledDraft&0xffffff));send(Action::Setting,LedColor,hex);}
+ }
+ if(b->kind==23&&code==LV_EVENT_CLICKED){ledDraft=uint32_t(b->key);char hex[10];snprintf(hex,sizeof hex,"%06lx",(unsigned long)(ledDraft&0xffffff));send(Action::Setting,LedColor,hex);next(Screen::LedColor);}
+ if(b->kind==24&&code==LV_EVENT_CLICKED){send(Action::LedSensor,b->key,b->text);next(Screen::Led);}
 
 }
 static void bind(lv_obj_t*o,int kind,int key=0,Screen s=Screen::Home,Action a=Action::Setting,const char*t=""){
@@ -300,7 +310,43 @@ static void metricPage(){title(names(metric),Screen::Sensors);makeBody();sensorH
  auto*b=button(body,tr("Ustawienia sensora","Sensor-Einstellungen","Sensor settings"),0,0,224,64);bind(b,0,metric,deviceMode()?Screen::SensorValue:Screen::SensorSettings);
 }
 static void settings(){title(tr("Ustawienia","Einstellungen","Settings"));makeBody();
+ navRow(&img_sun,tr("Świetliki LED","LED-Licht","LED lighting"),Screen::Led,0);
  navRow(&img_settings,tr("Ogólne","Allgemein","General"),Screen::General,0);navRow(&img_sun,tr("Wygląd","Design","Appearance"),Screen::Appearance,0,themeName());navRow(&img_camera,tr("Kamera","Kamera","Camera"),Screen::CameraSettings,45);navRow(&img_volume,tr("Audio","Audio","Audio"),Screen::AudioSettings,0);navRow(&img_sensor,tr("Sensory","Sensoren","Sensors"),Screen::SensorSettings,90);navRow(&img_bell,tr("Powiadomienia","Meldungen","Alerts"),Screen::Alerts,135);navRow(&img_wifi,tr("Połączenie","Verbindung","Connection"),Screen::Network,180);navRow(&img_info,tr("System","System","System"),Screen::System,225);
+}
+static const char*ledModeText(){return data.led.mode==SignalLed::Mode::Co2?tr("Według CO₂","Nach CO₂","CO₂ signal"):data.led.mode==SignalLed::Mode::Off?tr("Wyłączone","Aus","Off"):tr("Stały kolor","Feste Farbe","Fixed color");}
+static void refreshLedPreview(){if(ledPreview)lv_obj_set_style_bg_color(ledPreview,col(ledDraft),0);if(ledHex)lv_label_set_text_fmt(ledHex,"#%06lX",(unsigned long)ledDraft);}
+static void ledPage(){title(tr("Świetliki LED","LED-Licht","LED lighting"),ledBack);makeBody();
+ auto*preview=box(body,0,flowY(),224,80);ledSignal=box(preview,12,18,40,44,data.ledOutput);lv_obj_set_style_border_width(ledSignal,1,0);lv_obj_clear_flag(ledSignal,LV_OBJ_FLAG_CLICKABLE);label(preview,ledModeText(),64,10,148,&font_ui18);
+ ledStatus=label(preview,"",64,42,148,&font_ui14,MUTED);
+ auto*modes=box(body,0,flowY(),224,64,BG);style(modes,BG,0,0);
+ const char*labels[]={tr("Stały","Farbe","Color"),"CO₂",tr("Wył.","Aus","Off")};
+ for(int i=0;i<3;i++){auto*b=button(modes,labels[i],i*76,0,72,64);lv_obj_set_style_bg_color(b,col(int(data.led.mode)==i?SELECTED:CARD),0);lv_obj_set_style_border_width(b,int(data.led.mode)==i?2:1,0);lv_obj_set_style_border_color(b,col(int(data.led.mode)==i?LIME:BORDER),0);bind(b,21,i);}
+ slider(&img_sun,tr("Jasność LED","LED-Helligkeit","LED brightness"),LedBrightness,data.led.brightness,0);
+ if(data.led.mode==SignalLed::Mode::Fixed)navRow(&img_sun,tr("Kolor podświetlenia","Lichtfarbe","Light color"),Screen::LedColor,0);
+ if(data.led.mode==SignalLed::Mode::Co2){int slot=SignalLed::sensorIndex(data.led,data.sensors,data.sensorCount);
+  navRow(&img_sensor,tr("Sensor CO₂","CO₂-Sensor","CO₂ sensor"),Screen::LedSensor,0,slot>=0?data.sensors[slot].config.name:tr("Wybierz sensor","Sensor wählen","Choose sensor"));
+  const uint32_t colors[]={SignalLed::Green,SignalLed::Orange,SignalLed::Red};const char*ranges[]={"< 1200 ppm","1200–1499 ppm",">= 1500 ppm"};
+  for(int i=0;i<3;i++){auto*r=box(body,0,flowY(),224,52);auto*dot=box(r,14,16,20,20,colors[i]);lv_obj_set_style_radius(dot,10,0);lv_obj_set_style_border_width(dot,1,0);lv_obj_clear_flag(dot,LV_OBJ_FLAG_CLICKABLE);label(r,ranges[i],48,15,164,&font_body18);}
+  flowText(tr("700 ppm: zielony. Brak świeżego odczytu: wolno migający niebieski. Powrót koloru z histerezą 50 ppm.","700 ppm: grün. Kein aktueller Wert: blaues Blinken. Rückkehr mit 50 ppm Hysterese.","700 ppm: green. No fresh reading: slow blue blink. Return hysteresis: 50 ppm."));
+ }
+ flowText(tr("Start: czerwony. Gotowość: zielony przez 1,5 s. Oba świetliki mają wspólny kolor.","Start: rot. Bereit: 1,5 s grün. Beide Lichtfenster zeigen dieselbe Farbe.","Startup: red. Ready: green for 1.5 s. Both light pipes share one color."));
+}
+static void ledColorPage(){title(tr("Kolor LED","LED-Farbe","LED color"),Screen::Led);makeBody();
+ auto*preview=box(body,0,flowY(),224,76);ledPreview=box(preview,12,12,52,52,ledDraft);lv_obj_set_style_border_width(ledPreview,1,0);lv_obj_clear_flag(ledPreview,LV_OBJ_FLAG_CLICKABLE);label(preview,"RGB",80,12,132,&font_ui14,MUTED);ledHex=label(preview,"",80,36,132,&font_ui20);refreshLedPreview();
+ const uint32_t colors[]={0x00ff00,0xff7800,0xff0000,0x0088ff,0x00ffff,0xa040ff,0xffffff,0xffdd00};
+ auto*paletteBox=box(body,0,flowY(),224,116,BG);style(paletteBox,BG,0,0);
+ for(int i=0;i<8;i++){auto*b=button(paletteBox,"",i%4*57,i/4*60,53,56);auto*dot=box(b,12,13,29,29,colors[i]);lv_obj_set_style_border_width(dot,1,0);lv_obj_set_style_radius(dot,15,0);lv_obj_clear_flag(dot,LV_OBJ_FLAG_CLICKABLE);if(ledDraft==colors[i]){lv_obj_set_style_border_width(b,2,0);lv_obj_set_style_border_color(b,col(LIME),0);}bind(b,23,int(colors[i]));}
+ const char*names[]={tr("Czerwony","Rot","Red"),tr("Zielony","Grün","Green"),tr("Niebieski","Blau","Blue")};const uint32_t inks[]={0xff5263,0x00c86b,0x4898ff};
+ for(int i=0;i<3;i++){auto*r=box(body,0,flowY(),224,96);label(r,names[i],12,10,140,&font_ui18);auto*v=label(r,"",158,10,54,&font_ui18);lv_obj_set_style_text_align(v,LV_TEXT_ALIGN_RIGHT,0);auto*sl=lv_slider_create(r);lv_obj_set_pos(sl,22,64);lv_obj_set_size(sl,180,10);lv_slider_set_range(sl,0,255);lv_slider_set_value(sl,(ledDraft>>((2-i)*8))&255,LV_ANIM_OFF);lv_label_set_text_fmt(v,"%d",int(lv_slider_get_value(sl)));
+  for(auto part:{LV_PART_MAIN,LV_PART_INDICATOR,LV_PART_KNOB}){lv_obj_set_style_bg_opa(sl,LV_OPA_COVER,part);lv_obj_set_style_radius(sl,LV_RADIUS_CIRCLE,part);}lv_obj_set_style_bg_color(sl,col(TRACK),LV_PART_MAIN);lv_obj_set_style_bg_color(sl,col(inks[i]),LV_PART_INDICATOR);lv_obj_set_style_bg_color(sl,col(KNOB),LV_PART_KNOB);lv_obj_set_style_pad_all(sl,8,LV_PART_KNOB);lv_obj_set_ext_click_area(sl,18);
+  lv_obj_add_event_cb(sl,[](lv_event_t*e){lv_label_set_text_fmt((lv_obj_t*)lv_event_get_user_data(e),"%d",int(lv_slider_get_value(lv_event_get_target(e))));},LV_EVENT_VALUE_CHANGED,v);bind(sl,22,i);
+ }
+ flowText(tr("Wybierz gotowy kolor lub ustaw dowolny RGB. Zapis po puszczeniu suwaka. Tryb CO₂ używa kolorów progów.","Farbe wählen oder RGB einstellen. Speicherung beim Loslassen. CO₂ nutzt die Schwellenfarben.","Choose a preset or any RGB color. Saved on slider release. CO₂ uses threshold colors."));
+}
+static void ledSensorPage(){title(tr("Sensor CO₂","CO₂-Sensor","CO₂ sensor"),Screen::Led);makeBody();int chosen=SignalLed::sensorIndex(data.led,data.sensors,data.sensorCount),count=0;
+ for(int i=0;i<data.sensorCount;i++){const auto&d=data.sensors[i];if(!SensorRegistry::supported(d.config,2))continue;count++;auto*r=row(&img_co2,d.config.name,d.config.source==SensorRegistry::Source::Scd41?"POGO · CO₂":"BLE · CO₂",0);if(i==chosen)lv_obj_set_style_border_color(r,col(LIME),0);bind(r,24,i*4+int(d.config.source),Screen::Home,Action::LedSensor,d.config.address);}
+ if(!count){flowText(tr("Najpierw dodaj sensor z pomiarem CO₂ (SCD41 POGO lub zgodny BLE). eCO₂ nie jest używane.","Zuerst CO₂-Sensor hinzufügen (SCD41 POGO oder BLE). eCO₂ wird nicht verwendet.","First add a CO₂ sensor (SCD41 POGO or compatible BLE). eCO₂ is not used."));navRow(&img_sensor,tr("Dodaj sensor","Sensor hinzufügen","Add sensor"),Screen::AddSensor,0);}
+ else flowText(tr("Wybór włącza sygnalizację CO₂. Niezależnie od pomiaru wybranego na ekranie głównym.","Auswahl aktiviert CO₂-Licht. Unabhängig vom Messwert auf der Startseite.","Selection enables CO₂ lighting, independently of the home screen's chosen reading."));
 }
 static const char*linkText(){switch(data.wifiLink){
  case WifiLinkState::Connecting:return tr("Łączenie…","Verbinden…","Connecting…");
@@ -407,7 +453,8 @@ static void updatePage(){title("Software",Screen::System);makeBody(100);
  otaCheckButton=button(root,tr("Sprawdź","Prüfen","Check"),8,264,108,52);bind(otaCheckButton,13);
  otaInstallButton=button(root,tr("Aktualizuj","Update","Update"),124,264,108,52,true);bind(otaInstallButton,14);
 }
-void show(Screen s,int m){if(s==Screen::Live&&page!=Screen::Live){hudVisible=true;if(page!=Screen::CameraSettings&&page!=Screen::Network)liveFullscreen=false;}page=s;pending=s;palette();metric=std::max(0,std::min(6,m));rebuild=false;bindCount=0;image=valueLabel=onlineLabel=minLabel=maxLabel=chart=recordLabel=sensorInfo=wave=nullptr;overlay=editor=keyboard=editorHint=revealLabel=nullptr;joiningWifi=false;
+void show(Screen s,int m){if(s==Screen::LedColor&&page!=Screen::LedColor)ledDraft=SignalLed::color(data.led);if(s==Screen::Live&&page!=Screen::Live){hudVisible=true;if(page!=Screen::CameraSettings&&page!=Screen::Network)liveFullscreen=false;}page=s;pending=s;palette();metric=std::max(0,std::min(6,m));rebuild=false;bindCount=0;image=valueLabel=onlineLabel=minLabel=maxLabel=chart=recordLabel=sensorInfo=wave=nullptr;overlay=editor=keyboard=editorHint=revealLabel=nullptr;joiningWifi=false;
+ ledPreview=ledHex=ledStatus=ledSignal=nullptr;
  otaCheckButton=otaInstallButton=otaProgress=otaPercent=nullptr;otaConfirm=false;
  for(auto&v:sensorValues)v=nullptr;for(auto&v:sensorStatusText)v=nullptr;homeTiles=nullptr;
  clockLabel=batteryLabel=wifiIcon=liveSettings=batteryStatus=nullptr;topBattery=BatteryIcon();detailBattery=BatteryIcon();liveHeader=liveBack=liveToggle=liveVolume=liveConnect=nullptr;liveHud=liveEmpty=liveEmptyTitle=liveEmptyHint=liveStatus=volumeSlider=nullptr;volumeOpen=false;for(auto&v:liveButtons)v=nullptr;for(auto&v:liveGlyphs)v=nullptr;
@@ -415,6 +462,7 @@ void show(Screen s,int m){if(s==Screen::Live&&page!=Screen::Live){hudVisible=tru
  if(!root)root=lv_obj_create(nullptr);else lv_obj_clean(root);body=nullptr;style(root,BG,0,0);lv_obj_set_style_text_font(root,&font_ui14,0);lv_obj_clear_flag(root,LV_OBJ_FLAG_SCROLLABLE);lv_scr_load(root);
  if(s==Screen::Live)lv_obj_set_style_bg_color(root,col(0x000000),0);else makeHeader(root,s==Screen::Home);
  switch(s){
+ case Screen::Led:ledPage();break;case Screen::LedColor:ledColorPage();break;case Screen::LedSensor:ledSensorPage();break;
  case Screen::Home:home();break;case Screen::Live:live();break;case Screen::Sensors:sensors();break;case Screen::AddSensor:addSensor();break;case Screen::SensorValue:sensorValue();break;case Screen::Metric:metricPage();break;case Screen::Settings:settings();break;case Screen::Network:network();break;case Screen::WifiSettings:wifiSettings(false);break;case Screen::Direct:wifiSettings(true);break;case Screen::Bluetooth:bluetoothPage();break;case Screen::Scan:scan();break;case Screen::Recordings:gallery();break;case Screen::WifiNetworks:wifiNetworks();break;case Screen::Languages:languages();break;case Screen::Appearance:appearance();break;case Screen::Update:updatePage();break;
  case Screen::Cameras:title(tr("Kamery","Kameras","Cameras"));makeBody(188);{const char*cameraTitle=tr("Podgląd","Live-Bild","Live view");auto*f=rowFont(cameraTitle,164);int h=wrappedHeight(cameraTitle,164,f);auto*r=box(body,0,0,224,std::max(88,h+font_ui18.line_height+24));lv_obj_set_style_border_color(r,col(LIME),0);icon(r,&img_camera,10,22,LIME);wrapped(r,cameraTitle,48,10,164,f);label(r,data.camera?tr("● Połączona","● Verbunden","● Online"):tr("○ Offline","○ Offline","○ Offline"),48,16+h,164,&font_body18,data.camera?LIME:MUTED);bind(r,0,0,Screen::Live);}navRow(&img_folder,tr("Nagrania i zdjęcia","Aufnahmen & Fotos","Recordings & photos"),Screen::Recordings,83);navRow(&img_settings,tr("Ustawienia kamery","Kamera-Einstellungen","Camera settings"),Screen::CameraSettings,132);navRow(&img_volume,tr("Ustawienia audio","Audio-Einstellungen","Audio settings"),Screen::AudioSettings,181);send(Action::LoadFiles,0,"");footer();break;
  case Screen::General:title(tr("Ogólne","Allgemein","General"),Screen::Settings);makeBody();navRow(&img_globe,tr("Język","Sprache","Language"),Screen::Languages,0,languageName(data.settings.language));navRow(&img_sun,tr("Wyświetlacz","Display","Display"),Screen::Display,45);navRow(&img_battery,tr("Bateria","Batterie","Battery"),Screen::Battery,90);row(&img_clock,tr("Czas automatyczny","Automatische Zeit","Automatic time"),"NTP",204);break;
@@ -425,7 +473,7 @@ void show(Screen s,int m){if(s==Screen::Live&&page!=Screen::Live){hudVisible=tru
   auto*c=box(body,0,154,224,49,LIME);auto*l=label(c,tr("Aktywny","Aktiv","Active"),0,12,224,&font_ui20,ACCENT_INK);lv_obj_set_style_text_align(l,LV_TEXT_ALIGN_CENTER,0);
   flowText(tr("Biel powinna być biała,\na czerń możliwie ciemna.","Weiß sollte weiß sein,\nSchwarz möglichst dunkel.","White should look white;\nblack as dark as possible."),&font_body18,TEXT);
  }break;
- case Screen::SensorSettings:title(tr("Ustawienia sensorów","Sensor-Einstellungen","Sensor settings"),Screen::Sensors);makeBody();numberRow(tr("Zapis co [s]","Speichern alle [s]","Save every [s]"),LogInterval,data.settings.logIntervalSec,60);toggle(&img_folder,tr("Zapis na SD","Auf SD speichern","Save to SD"),data.settings.logging,Logging,109);navRow(&img_bell,tr("Progi alarmów","Alarmgrenzen","Alert thresholds"),Screen::Limits,158);navRow(&img_scan,tr("Skanowanie I²C","I²C scannen","I²C scan"),Screen::Scan,207);break;
+ case Screen::SensorSettings:title(tr("Ustawienia sensorów","Sensor-Einstellungen","Sensor settings"),Screen::Sensors);makeBody();navRow(&img_sun,tr("Świetliki LED","LED-Licht","LED lighting"),Screen::Led,0);numberRow(tr("Zapis co [s]","Speichern alle [s]","Save every [s]"),LogInterval,data.settings.logIntervalSec,60);toggle(&img_folder,tr("Zapis na SD","Auf SD speichern","Save to SD"),data.settings.logging,Logging,109);navRow(&img_bell,tr("Progi alarmów","Alarmgrenzen","Alert thresholds"),Screen::Limits,158);navRow(&img_scan,tr("Skanowanie I²C","I²C scannen","I²C scan"),Screen::Scan,207);break;
  case Screen::Limits:title(tr("Progi alarmów","Alarmgrenzen","Alert thresholds"),Screen::SensorSettings);makeBody();numberRow(tr("Temp. min [°C]","Temp. min [°C]","Temp. min [°C]"),TempMin,data.settings.tempMin,0);numberRow(tr("Temp. max [°C]","Temp. max [°C]","Temp. max [°C]"),TempMax,data.settings.tempMax,45);numberRow(tr("Wilg. min [%]","Feuchte min [%]","Humidity min [%]"),HumidityMin,data.settings.humidityMin,90);numberRow(tr("Wilg. max [%]","Feuchte max [%]","Humidity max [%]"),HumidityMax,data.settings.humidityMax,135);numberRow("CO₂ max [ppm]",Co2Max,data.settings.co2Max,180);numberRow("IAQ max",IaqMax,data.settings.iaqMax,225);break;
  case Screen::CameraSettings:title(tr("Kamera","Kamera","Camera"),cameraSettingsBack);makeBody();row(&img_video,tr("Obraz","Bild","Video"),"QVGA · ~8 fps",0);toggle(&img_moon,tr("Tryb nocny","Nachtmodus","Night mode"),data.night,0,45,"night",data.camera);toggle(&img_motion,tr("Detekcja ruchu","Bewegung","Motion detection"),data.motionEnabled,0,90,"motion",data.motionCap);navRow(&img_folder,tr("Nagrania","Aufnahmen","Recordings"),Screen::Recordings,0);flowText(tr("Płynność zależy od Wi-Fi. Tryb nocny: obraz czarno-biały. Podczerwień wymaga diod IR.","Bildrate je nach WLAN. Nachtmodus: Schwarz-Weiß. Infrarot braucht IR-LEDs.","Frame rate depends on Wi-Fi. Night mode: monochrome. Infrared needs IR LEDs."));break;
  case Screen::AudioSettings:title(tr("Audio","Audio","Audio"),Screen::Settings);makeBody();slider(&img_volume,tr("Głośność","Lautstärke","Volume"),Volume,data.settings.volume,0);{auto*b=button(body,data.listening?tr("Wyłącz odsłuch","Hören beenden","Stop listening"):tr("Włącz odsłuch","Hören starten","Start listening"),0,0,224,64,true);bind(b,7,0,Screen::Home,Action::Listen);if(!data.audioCap||!data.camera)lv_obj_add_state(b,LV_STATE_DISABLED);}toggle(&img_mic,tr("Alarm dźwięku","Geräuschalarm","Sound alert"),data.noiseEnabled,0,0,"noise",data.audioCap&&data.camera);navRow(&img_mic,tr("Mówienie","Sprechen","Talk"),Screen::Audio,0);flowText(data.audioCap?tr("Alarm reaguje na głośny dźwięk.","Alarm bei lauten Geräuschen.","Alerts react to loud sounds."):tr("Kamera nie ma modułu audio.","Kamera ohne Audiomodul.","Camera has no audio module."));break;
@@ -449,11 +497,14 @@ void begin(Dispatch d){send=d;imageBuf=(lv_color_t*)lv_mem_alloc(Video::bytes);i
 Screen current(){return page;}
 void frame(const uint16_t*p){if(!imageBuf||!p)return;memcpy(imageBuf,p,Video::bytes);frameReady=true;if(image)lv_obj_invalidate(image);if(page==Screen::Live)refreshLive();}
 void update(const AppState&s){
+ Screen oldPage=page;bool ledPageOpen=page==Screen::Led||page==Screen::LedColor||page==Screen::LedSensor;int ledScroll=ledPageOpen&&body?lv_obj_get_scroll_y(body):0;
  bool liveModeChanged=data.playing!=s.playing;bool wasVolume=volumeOpen;int volumeDraft=volumeSlider?lv_slider_get_value(volumeSlider):s.settings.volume;
  bool changed=data.theme!=s.theme||data.camera!=s.camera||data.audioCap!=s.audioCap||data.recording!=s.recording||data.listening!=s.listening||data.fileCount!=s.fileCount||data.settings.language!=s.settings.language||data.alertCount!=s.alertCount||data.bmeFresh!=s.bmeFresh||data.scdFresh!=s.scdFresh||data.night!=s.night||data.motionEnabled!=s.motionEnabled||data.noiseEnabled!=s.noiseEnabled;
  if(page==Screen::WifiSettings||page==Screen::Direct||page==Screen::WifiNetworks)changed=changed||data.wifiLink!=s.wifiLink||strcmp(data.connectedSsid,s.connectedSsid)||(page==Screen::WifiNetworks&&data.wifiScanGeneration!=s.wifiScanGeneration);
  if(page==Screen::Update)changed=changed||data.ota.state!=s.ota.state||data.ota.error!=s.ota.error||data.ota.detail!=s.ota.detail||strcmp(data.ota.version,s.ota.version);
  if(page==Screen::Bluetooth)changed=changed||data.bleGeneration!=s.bleGeneration;
+ if(page==Screen::Led)changed=changed||!SignalLed::same(data.led,s.led)||data.sensorGeneration!=s.sensorGeneration;
+ if(page==Screen::LedSensor)changed=changed||data.sensorGeneration!=s.sensorGeneration||!SignalLed::same(data.led,s.led);
  if(page==Screen::SensorValue)changed=changed||data.bleError!=s.bleError;
  if(page==Screen::Home||page==Screen::Sensors||page==Screen::SensorValue||page==Screen::Scan)changed=changed||data.sensorGeneration!=s.sensorGeneration;
  bool added=data.sensorAddedGeneration!=s.sensorAddedGeneration,selected=data.sensorGeneration!=s.sensorGeneration&&page==Screen::SensorValue;
@@ -462,6 +513,7 @@ void update(const AppState&s){
  if(editing){snprintf(draft,sizeof draft,"%s",lv_textarea_get_text(editor));snprintf(hint,sizeof hint,"%s",lv_label_get_text(editorHint));snprintf(selectedSsid,sizeof selectedSsid,"%s",joinSsid);}
  data=s;if(added){selectedDevice=data.lastAdded;next(Screen::SensorValue);}else if(selected&&deviceMode()){next(Screen::Sensors);}
  if(rebuild)show(pending,pendingMetric);else if(themeChanged||(page==Screen::Live&&liveModeChanged)||(changed&&page!=Screen::Metric&&page!=Screen::Scan&&page!=Screen::Live&&!editor))show(page,metric);
+ if(ledPageOpen&&page==oldPage&&body)lv_obj_scroll_to_y(body,ledScroll,LV_ANIM_OFF);
  if(editing){edit(key,draft,editorTitle(key));keyPage=kbPage;keyUpper=kbUpper;keyboardMap();lv_label_set_text(editorHint,hint);lv_textarea_set_password_mode(editor,wasMasked);if(revealLabel)lv_img_set_src(revealLabel,wasMasked?&img_eye:&img_eye_off);joiningWifi=wasJoining;if(wasJoining){snprintf(joinSsid,sizeof joinSsid,"%s",selectedSsid);lv_label_set_long_mode(editorHint,LV_LABEL_LONG_SCROLL_CIRCULAR);}}
 
  if(themeChanged&&wasVolume&&page==Screen::Live){openVolume();lv_slider_set_value(volumeSlider,volumeDraft,LV_ANIM_OFF);lv_event_send(volumeSlider,LV_EVENT_VALUE_CHANGED,nullptr);}
@@ -470,6 +522,7 @@ void update(const AppState&s){
 
  updateBatteryIcon(topBattery,page==Screen::Live?0xffffff:TEXT);updateBatteryIcon(detailBattery,TEXT);
  layoutHeader();
+ if(page==Screen::Led&&ledStatus){char text[40];if(data.led.mode==SignalLed::Mode::Co2){int slot=SignalLed::sensorIndex(data.led,data.sensors,data.sensorCount);if(slot>=0&&SensorRegistry::fresh(data.sensors[slot],2,data.nowMs)&&data.sensors[slot].values[2]>=0)snprintf(text,sizeof text,"%.0f ppm",data.sensors[slot].values[2]);else snprintf(text,sizeof text,"%s",tr("Brak danych","Keine Werte","No data"));}else if(data.led.mode==SignalLed::Mode::Fixed)snprintf(text,sizeof text,"#%06lX · %u%%",(unsigned long)SignalLed::color(data.led),data.led.brightness);else snprintf(text,sizeof text,"%s",tr("LED wyłączona","LED aus","LED off"));lv_label_set_text(ledStatus,text);lv_obj_set_style_bg_color(ledSignal,col(data.ledOutput),0);}
  if(page==Screen::Sensors||page==Screen::Home)for(int i=0;i<data.sensorCount;i++)refreshDevice(i);
 
  if(page==Screen::Metric){char n[40];float v=readingValue();if(readingValid()&&isfinite(v))snprintf(n,sizeof n,metric==0||metric==4?"%.1f %s":"%.0f %s",v,unit(metric));else snprintf(n,sizeof n,"— %s",unit(metric));lv_label_set_text(valueLabel,n);lv_label_set_text(onlineLabel,readingValid()?tr("● Połączony","● Verbunden","● Connected"):tr("○ Brak danych","○ Keine Werte","○ No data"));

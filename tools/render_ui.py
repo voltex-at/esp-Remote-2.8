@@ -35,3 +35,15 @@ for i,(name,caption) in enumerate(tiles):
     screen=Image.open(out/name);preview.paste(screen,(x+(320-screen.width)//2,y+26))
 draw.text((12,659),'LVGL · V1.3.11 · przykładowe dane i obraz testowy',font=font,fill='#b2becb')
 preview.save(root/'docs/CAMERA_ORIENTATION_V1_3_11.png')
+
+# New light-pipe settings, rendered by the same real LVGL objects.
+preview=Image.new('RGB',(756,716),'#16212e');draw=ImageDraw.Draw(preview)
+tiles=(('ui_0_30.png','Stały kolor'),('ui_0_31.png','Paleta i dowolny RGB'),
+       ('ui_0_32.png','Wybór sensora CO₂'),('led_co2_0_0.png','Sygnalizacja CO₂'),
+       ('led_thresholds_0_0.png','Progi i brak odczytu'),('led_co2_1_1.png','Jasny motyw · Deutsch'))
+for i,(name,caption) in enumerate(tiles):
+    x=6+(i%3)*252;y=8+(i//3)*350
+    draw.text((x+4,y),caption,font=font,fill='#f7f9fc')
+    preview.paste(Image.open(out/name),(x,y+26))
+draw.text((10,696),'LVGL · V1.3.12 · przykładowe odczyty',font=font,fill='#b2becb')
+preview.save(root/'docs/LED_LIGHT_PIPES_V1_3_12.png')

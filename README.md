@@ -5,6 +5,12 @@ Wi-Fi z wyszukiwaniem sieci i klawiaturą hasła, języki polski/niemiecki/angie
 sensory BME688/BSEC2 i SCD41 przez I²C/pogo, ESP-CAM przez router lub Direct,
 karta SD przeznaczona na nagrania i logi. Nie zmieniono schematu ustawień V1.2.
 
+V1.3.12 wykorzystuje tylną diodę RGB dla **świetlików obudowy**: czerwony start,
+zielona gotowość, dowolny kolor RGB i osobna jasność. Sygnalizacja wybranego sensora
+CO₂: zielony / od 1200 ppm pomarańczowy / od 1500 ppm czerwony. Brak aktualnego
+odczytu: miganie niebieskie. **Ustawienia → Świetliki LED**.
+[Instrukcja, ograniczenia i podgląd](docs/LED_LIGHT_PIPES_V1_3_12.md).
+
 V1.3.11 poprawia kamerę: pełny ekran przełącza obraz i dotyk do **poziomu 320×240**,
 a wyjście przywraca pion. Komunikat „Brak obrazu” i przyciski mają osobne obszary.
 Wskaźniki Wi-Fi, baterii i procentów są wyrównane; segmenty oraz piorun mieszczą się
@@ -71,5 +77,5 @@ Istniejące wydania nie są nadpisywane. Każdy commit nie oznacza nowego wydani
 Pełna dokumentacja sprzętu i funkcji: [README_PL.md](README_PL.md).
 OTA: [docs/OTA.md](docs/OTA.md). Diagnostyka LCD: [docs/LCD_FIX_V1_2.md](docs/LCD_FIX_V1_2.md).
 
-V1.3.11 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
+V1.3.12 wymaga testu na fizycznym pilocie. Testy na PC i udana kompilacja nie potwierdzają
 działania LCD, sensorów, radia ani aktualizacji przy zaniku zasilania.

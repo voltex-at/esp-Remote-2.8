@@ -21,5 +21,6 @@ void alert(const char*);
 void dispatch(Action,int,const char*);
 namespace Board { void displayBegin();void bootStatus(const char*,const char*);void bootError(const char*,const char*);void bootReport();bool begin();void brightness(uint8_t);void battery();bool audioBegin();bool audioReady();void audioTask(void*);void audioSession(const char*,const char*,bool,bool);void readTouch(lv_indev_drv_t*,lv_indev_data_t*); }
 namespace Sensors { void task(void*);void scan(); }
+namespace Light { void begin();void ready();void tick(uint32_t); }
 namespace Storage { bool begin();void logSample(const AppState&);void logEvent(const char*);bool available();String newPath(const char*,const char*);void files(); }
 namespace Media { void task(void*); }

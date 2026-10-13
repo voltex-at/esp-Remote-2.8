@@ -37,6 +37,10 @@ jobs:
           /tmp/battery_test
           g++ -std=c++11 -fsanitize=address,undefined -I remote/include tests/sensor_registry_test.cpp -o /tmp/sensor_test
           /tmp/sensor_test
+          g++ -std=c++11 -fsanitize=address,undefined -I remote/include tests/signal_led_test.cpp -o /tmp/led_test
+          /tmp/led_test
+          g++ -std=c++11 -fsanitize=address,undefined -I tests/led_stub -I remote/include tests/signal_led_driver_test.cpp remote/src/signal_led.cpp -o /tmp/led_driver_test
+          /tmp/led_driver_test
           g++ -std=c++17 -I remote/include tests/portrait_test.cpp -o /tmp/portrait_test
           /tmp/portrait_test
           g++ -std=c++17 -I tests/display_stub -I remote/include tests/display_transport_test.cpp remote/src/portrait_display.cpp -o /tmp/lcd_test

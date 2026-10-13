@@ -49,9 +49,9 @@ static void load(){config.begin("remote-v1",false);Settings defaults;Settings s=
  // Versioned POD blob, no sensitive values printed to serial.
  if(config.getUInt("schema",0)==1&&config.getBytesLength("settings")==sizeof s)config.getBytes("settings",&s,sizeof s);
  s.ssid[32]=0;s.password[64]=0;s.cameraHost[63]=0;s.pairToken[64]=0;s.brightness=constrain(s.brightness,5,100);s.language=constrain(s.language,0,2);s.volume=constrain(s.volume,0,100);s.timeoutSec=constrain(s.timeoutSec,15,600);s.logIntervalSec=constrain(s.logIntervalSec,5,300);
- Guard g(stateMutex);state.settings=s;state.theme=ThemeSettings::load(config);
+ Guard g(stateMutex);state.settings=s;state.theme=ThemeSettings::load(config);state.led=SignalLed::load(config);
 }
-static void save(){Settings s;ThemeMode theme;{Guard g(stateMutex);s=state.settings;theme=state.theme;}config.putBytes("settings",&s,sizeof s);config.putUInt("schema",1);if(!ThemeSettings::save(config,theme))message("Nie udalo sie zapisac wygladu");}
+static void save(){Settings s;ThemeMode theme;SignalLed::Config led;{Guard g(stateMutex);s=state.settings;theme=state.theme;led=state.led;}config.putBytes("settings",&s,sizeof s);config.putUInt("schema",1);if(!ThemeSettings::save(config,theme))message("Nie udalo sie zapisac wygladu");if(!SignalLed::save(config,led))message("Nie udalo sie zapisac LED");}
 static Settings networkSettings(){Guard g(stateMutex);return state.settings;}
 static bool connect(){Settings s=networkSettings();WiFi.disconnect();WiFi.mode(WIFI_STA);WiFi.setSleep(false);WiFi.setAutoReconnect(true);
  if(!s.ssid[0]){Guard g(stateMutex);state.wifiLink=WifiLinkState::Offline;return false;}
@@ -60,6 +60,9 @@ static bool connect(){Settings s=networkSettings();WiFi.disconnect();WiFi.mode(W
 static void apply(int key,const char*text,int value){
  {Guard g(stateMutex);auto&s=state.settings;switch(key){
  case Appearance:state.theme=ThemeSettings::normalize(value);break;
+ case LedMode:if(value>=0&&value<=2)state.led.mode=SignalLed::Mode(value);break;
+ case LedBrightness:state.led.brightness=constrain(value,0,100);break;
+ case LedColor:{uint32_t rgb;if(SignalLed::parseColor(text,rgb))SignalLed::color(state.led,rgb);break;}
  case Brightness:s.brightness=constrain(value,5,100);break;case Timeout:s.timeoutSec=constrain(value,15,600);break;case Language:s.language=constrain(value,0,2);break;case LogInterval:s.logIntervalSec=constrain(value,5,300);break;case Logging:s.logging=value;break;case Notifications:s.notifications=value;break;case Volume:s.volume=constrain(value,0,100);break;case NetworkMode:s.networkMode=value?1:0;if(!s.networkMode)strlcpy(s.cameraHost,"192.168.4.1",sizeof s.cameraHost);break;
  case WifiSsid:strlcpy(s.ssid,text,sizeof s.ssid);break;case WifiPassword:strlcpy(s.password,text,sizeof s.password);break;case CameraHost:if(strstr(text,"://")||strchr(text,'/')){strlcpy(state.message,"Podaj tylko IP lub nazwe hosta",sizeof state.message);return;}strlcpy(s.cameraHost,text,sizeof s.cameraHost);break;case PairToken:if(strlen(text)>63){strlcpy(state.message,"Token: maksymalnie 63 znaki",sizeof state.message);return;}strlcpy(s.pairToken,text,sizeof s.pairToken);break;
  case TempMin:s.tempMin=value;break;case TempMax:s.tempMax=value;break;case HumidityMin:s.humidityMin=constrain(value,0,100);break;case HumidityMax:s.humidityMax=constrain(value,0,100);break;case Co2Max:s.co2Max=constrain(value,400,5000);break;case IaqMax:s.iaqMax=constrain(value,25,500);break;
@@ -127,6 +130,7 @@ static void networkTask(void*){
  }
 }
 void setup(){
+ Light::begin(); // Red from the first application instructions, before LCD/PSRAM.
  Serial.begin(115200);uint32_t usbWait=millis();while(!Serial&&millis()-usbWait<250)delay(5);
  const esp_reset_reason_t reset=esp_reset_reason();
  const BootStage previous=reset!=ESP_RST_POWERON&&retainedMagic==BOOT_TRACE_MAGIC&&(uint8_t)retainedStage<=(uint8_t)BootStage::Running?retainedStage:BootStage::Start;
@@ -156,7 +160,7 @@ void setup(){
  if(reset==ESP_RST_PANIC||reset==ESP_RST_INT_WDT||reset==ESP_RST_TASK_WDT||reset==ESP_RST_WDT||reset==ESP_RST_BROWNOUT){
   char text[120];snprintf(text,sizeof text,"Restart: %s (%s). USB: 115200",resetName(reset),stageName(previous));message(text);
  }
- ready=true;stage(BootStage::Running);Serial.println("[BOOT] READY: LVGL + sensors + network");
+ ready=true;Light::ready();stage(BootStage::Running);Serial.println("[BOOT] READY: LVGL + sensors + network");
 }
 void loop(){
  if(!ready){static uint32_t report=0;if(millis()-report>2000){report=millis();Board::bootReport();}delay(100);return;}
@@ -170,15 +174,17 @@ void loop(){
   if(c.action==Action::OtaCheck)Ota::check();else Ota::install(c.text);break;
  }
  case Action::Setting:apply(c.value,c.text,atoi(c.text));saveDue=now;break;
+ case Action::LedSensor:{bool accepted;uint8_t language;{Guard g(stateMutex);accepted=SignalLed::choose(state.led,state.sensors,state.sensorCount,c.value,c.text);language=state.settings.language;}if(accepted)save();else message(language==1?"LED-Sensor geaendert. Erneut waehlen.":language==2?"LED sensor changed. Select again.":"Sensor LED nieaktualny. Wybierz ponownie.");break;}
  case Action::Scan:Sensors::scan();break;
  case Action::BleScan:case Action::SensorAdd:case Action::SensorSelect:case Action::SensorRemove:SensorHub::command(c);break;
  case Action::Connect:case Action::WifiScan:if(xQueueSend(networkCommands,&c,0)!=pdTRUE)message("Kolejka Wi-Fi pelna");break;
- case Action::Reset:if(!SensorHub::reset()){message("Nie udalo sie usunac sensorow. Sprobuj ponownie.");break;}config.clear();{Guard g(stateMutex);state.settings=Settings();state.theme=ThemeMode::Dark;}save();ESP.restart();break;
+ case Action::Reset:if(!SensorHub::reset()){message("Nie udalo sie usunac sensorow. Sprobuj ponownie.");break;}config.clear();{Guard g(stateMutex);state.settings=Settings();state.theme=ThemeMode::Dark;state.led=SignalLed::Config{};}save();ESP.restart();break;
  case Action::ClearAlerts:{Guard g(stateMutex);state.alertCount=0;}break;
  case Action::Reboot:ESP.restart();break;
  default:if(xQueueSend(mediaCommands,&c,0)!=pdTRUE)message("Kolejka kamery pelna");break;
  }}(void)saveDue;
  if(now-batteryTick>=500){batteryTick=now;Board::battery();}
+ Light::tick(now);
  if(now-housekeepingTick>=2000){housekeepingTick=now;struct tm tm;if(getLocalTime(&tm,0)){Guard g(stateMutex);strftime(state.timeText,sizeof state.timeText,"%H:%M",&tm);} bool mounted;{Guard g(stateMutex);mounted=state.sd;}uint64_t freeBytes=0;{Guard sd(sdMutex);if(mounted){uint64_t total=SD_MMC.totalBytes(),used=SD_MMC.usedBytes();freeBytes=total>=used?total-used:0;}}{Guard g(stateMutex);state.uptime=now/1000;state.sdFree=freeBytes;}}
  if(now-uiTick>=200){uiTick=now;{Guard g(stateMutex);state.ota=Ota::status();}copyState(*uiState);Ui::update(*uiState);if(videoPixels&&xSemaphoreTake(frameMutex,0)==pdTRUE){if(videoDirty){Ui::frame(videoPixels);videoDirty=false;}xSemaphoreGive(frameMutex);}}
  uint32_t idle=lv_disp_get_inactive_time(nullptr);Settings s=networkSettings();bool talking;{Guard g(stateMutex);talking=state.talking;}
